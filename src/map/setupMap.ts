@@ -1,6 +1,7 @@
 import maplibregl, { Map as MapLibreMap, type StyleSpecification } from 'maplibre-gl';
 import { CAMERA, SCENARIO_CENTER, basemapTileUrl, terrainTileUrl } from '../config';
 import { addPlaceLabels } from './places';
+import { createAircraftLayer } from '../aircraft/AircraftLayer';
 
 /**
  * Build the MapLibre style: a single muted raster basemap, a terrarium-encoded
@@ -105,10 +106,9 @@ export function createMap(container: HTMLElement): MapLibreMap {
 		'top-left',
 	);
 
-	// Custom POI markers — added once the style is initialized so the underlying
-	// DOM container exists.
 	map.on('load', () => {
 		addPlaceLabels(map);
+		map.addLayer(createAircraftLayer());
 	});
 
 	return map;

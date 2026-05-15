@@ -11,7 +11,9 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
+    "@types/three": "^0.184.1",
     "maplibre-gl": "^5.24.0",
+    "three": "^0.184.0",
     "vue": "^3.5.34"
   },
   "devDependencies": {

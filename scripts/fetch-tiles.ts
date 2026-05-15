@@ -30,6 +30,19 @@ const DEMO_BBOX = {
 	latMax: 38.10,
 } as const;
 
+// Pitched + rotated camera reaches outside the operational bbox; download a buffer
+// in each direction so the visible-tile set always lives on disk. 0.15° is a few
+// km of slack at this latitude — covers ~all reasonable pan/orbit before the user
+// would pan into wholly different terrain.
+const TILE_PACK_BUFFER_DEG = 0.15;
+
+const FETCH_BBOX = {
+	lonMin: DEMO_BBOX.lonMin - TILE_PACK_BUFFER_DEG,
+	latMin: DEMO_BBOX.latMin - TILE_PACK_BUFFER_DEG,
+	lonMax: DEMO_BBOX.lonMax + TILE_PACK_BUFFER_DEG,
+	latMax: DEMO_BBOX.latMax + TILE_PACK_BUFFER_DEG,
+} as const;
+
 const ZOOM_RANGE = { min: 8, max: 13 } as const;
 
 const SOURCES = [
@@ -66,12 +79,12 @@ interface TileCoord {
 }
 
 function tilesForBbox(z: number): TileCoord[] {
-	const xMin = lonToTileX(DEMO_BBOX.lonMin, z);
-	const xMax = lonToTileX(DEMO_BBOX.lonMax, z);
+	const xMin = lonToTileX(FETCH_BBOX.lonMin, z);
+	const xMax = lonToTileX(FETCH_BBOX.lonMax, z);
 	// Note: tile y axis is flipped — north has lower y. Use the max-lat corner
 	// for the min y, and vice versa.
-	const yMin = latToTileY(DEMO_BBOX.latMax, z);
-	const yMax = latToTileY(DEMO_BBOX.latMin, z);
+	const yMin = latToTileY(FETCH_BBOX.latMax, z);
+	const yMax = latToTileY(FETCH_BBOX.latMin, z);
 
 	const tiles: TileCoord[] = [];
 	for (let x = xMin; x <= xMax; x++) {
@@ -164,7 +177,8 @@ async function main(): Promise<void> {
 	}
 
 	const perSource = SOURCES.length;
-	console.log(`Bbox: ${JSON.stringify(DEMO_BBOX)}`);
+	console.log(`Operational bbox: ${JSON.stringify(DEMO_BBOX)}`);
+	console.log(`Fetched bbox (with ${TILE_PACK_BUFFER_DEG}° buffer): ${JSON.stringify(FETCH_BBOX)}`);
 	console.log(`Zoom range: ${ZOOM_RANGE.min}..${ZOOM_RANGE.max}`);
 	console.log(`Tiles per source: ${allTiles.length}`);
 	console.log(`Total fetches: ${allTiles.length * perSource}`);
