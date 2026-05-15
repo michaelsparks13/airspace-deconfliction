@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { useAircraftStore } from '../composables/useAircraftStore';
 import { REPLAY } from '../config';
 
-const replay = useAircraftStore();
+const { replay } = useAircraftStore();
 
 const tDisplay = computed(() => {
 	const t = Math.floor(replay.currentTime.value);

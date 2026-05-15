@@ -1,34 +1,72 @@
 /**
- * Single source of truth for the current aircraft fleet. Replay mode (slice 5)
- * is the only feeder right now; slice 8 will add a live-mode branch that
- * fulfils the same shape, so renderers and deconfliction code never care
- * which mode is active.
+ * Single source of truth for the current aircraft fleet. Switches between
+ * replay (default, offline) and live (OpenSky) modes via setMode().
  *
- * Implemented as a module-level singleton — created once on first import — so
- * the AircraftLayer (which lives outside the Vue component tree) can read the
- * same shallowRef the panel and time bar do.
+ * Module-level singleton — created on first import — so the AircraftLayer
+ * (outside the Vue tree) can read the same ref the panel + time bar do.
  */
 
+import { computed, ref, watch, type ShallowRef } from 'vue';
 import type { Aircraft } from '../data/types';
-import type { ShallowRef } from 'vue';
 import { useReplay, type ReplayState } from './useReplay';
+import { useLive, type LiveState } from './useLive';
 
-let singleton: { replay: ReplayState } | null = null;
+export type DataMode = 'replay' | 'live';
 
-function ensure() {
-	if (!singleton) singleton = { replay: useReplay() };
+interface Store {
+	mode: ReturnType<typeof ref<DataMode>>;
+	replay: ReplayState;
+	live: LiveState;
+	aircraft: ShallowRef<Aircraft[]>;
+	setMode: (m: DataMode) => void;
+}
+
+let singleton: Store | null = null;
+
+function build(): Store {
+	const mode = ref<DataMode>('replay');
+	const replay = useReplay();
+	const live = useLive();
+
+	const aircraft = computed<Aircraft[]>(() =>
+		mode.value === 'replay' ? replay.aircraft.value : live.aircraft.value,
+	) as unknown as ShallowRef<Aircraft[]>;
+
+	watch(
+		mode,
+		(m) => {
+			if (m === 'live') {
+				live.start();
+			} else {
+				live.stop();
+			}
+		},
+		{ immediate: true },
+	);
+
+	return {
+		mode,
+		replay,
+		live,
+		aircraft,
+		setMode: (m: DataMode) => { mode.value = m; },
+	};
+}
+
+function ensure(): Store {
+	if (!singleton) singleton = build();
 	return singleton;
 }
 
-export function useAircraftStore() {
-	return ensure().replay;
+export function useAircraftStore(): Store {
+	return ensure();
 }
 
-/** For non-Vue consumers (the three.js layer): a stable getter. */
+/** Non-Vue accessor for the three.js layer. */
 export function getCurrentAircraft(): readonly Aircraft[] {
-	return ensure().replay.aircraft.value;
+	return ensure().aircraft.value;
 }
 
 export function getAircraftRef(): ShallowRef<Aircraft[]> {
-	return ensure().replay.aircraft;
+	return ensure().aircraft;
 }
