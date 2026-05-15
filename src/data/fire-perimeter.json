@@ -1,0 +1,33 @@
+{
+	"type": "Feature",
+	"properties": {
+		"name": "San Juan Complex (fictional)",
+		"incidentNumber": "CO-SJF-FAKE-2026",
+		"acresApprox": 3100,
+		"reportedAt": "2026-05-15T08:00:00-06:00",
+		"notes": "Fictional perimeter for the airspace-deconfliction portfolio prototype. Shape is hand-crafted to feel ridge-following, not a circle. NOT a real fire."
+	},
+	"geometry": {
+		"type": "Polygon",
+		"coordinates": [
+			[
+				[-107.8190, 37.8615],
+				[-107.8092, 37.8642],
+				[-107.7985, 37.8631],
+				[-107.7880, 37.8595],
+				[-107.7795, 37.8540],
+				[-107.7762, 37.8472],
+				[-107.7790, 37.8401],
+				[-107.7855, 37.8358],
+				[-107.7945, 37.8330],
+				[-107.8045, 37.8338],
+				[-107.8138, 37.8360],
+				[-107.8205, 37.8401],
+				[-107.8240, 37.8470],
+				[-107.8252, 37.8540],
+				[-107.8228, 37.8588],
+				[-107.8190, 37.8615]
+			]
+		]
+	}
+}

@@ -1,6 +1,8 @@
 import maplibregl, { Map as MapLibreMap, type StyleSpecification } from 'maplibre-gl';
 import { CAMERA, SCENARIO_CENTER, basemapTileUrl, terrainTileUrl } from '../config';
 import { addPlaceLabels } from './places';
+import { addFirePerimeterLayers } from './firePerimeterLayer';
+import { createTfrLayer } from './tfr';
 import { createAircraftLayer } from '../aircraft/AircraftLayer';
 import { getCurrentAircraft } from '../composables/useAircraftStore';
 import { getCurrentConflicts } from '../composables/useDeconfliction';
@@ -109,7 +111,11 @@ export function createMap(container: HTMLElement): MapLibreMap {
 	);
 
 	map.on('load', () => {
+		addFirePerimeterLayers(map);
 		addPlaceLabels(map);
+		// Order matters: TFR volume first, aircraft layer last so aircraft draw
+		// on top of (and read against) the translucent TFR walls.
+		map.addLayer(createTfrLayer());
 		map.addLayer(createAircraftLayer(getCurrentAircraft, getCurrentConflicts));
 	});
 
