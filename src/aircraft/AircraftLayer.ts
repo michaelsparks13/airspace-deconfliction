@@ -37,6 +37,7 @@ import {
 	aglBandFor,
 	buildGroundStem,
 	buildHaloRing,
+	buildOutlineRing,
 	setHaloColor,
 	type GroundStem,
 } from './visuals';
@@ -75,6 +76,7 @@ interface AircraftSlot {
 	root: THREE.Group;
 	mesh: THREE.Group;
 	halo: THREE.Mesh;
+	outline: THREE.LineLoop;
 	stem: GroundStem;
 	lastAgl: number | null;
 }
@@ -99,10 +101,11 @@ function makeSlot(aircraft: Aircraft, scene: THREE.Scene): AircraftSlot {
 	const root = new THREE.Group();
 	const mesh = buildAircraftMesh(aircraft.category);
 	const halo = buildHaloRing();
+	const outline = buildOutlineRing();
 	const stem = buildGroundStem(aircraft.crew);
-	root.add(mesh, halo, stem.object);
+	root.add(mesh, halo, outline, stem.object);
 	scene.add(root);
-	return { root, mesh, halo, stem, lastAgl: null };
+	return { root, mesh, halo, outline, stem, lastAgl: null };
 }
 
 /**
@@ -264,11 +267,15 @@ export function createAircraftLayer(
 					haloMat.color.setHex(CONFLICT_COLOR_HEX);
 					haloMat.opacity = pulse;
 					slot.stem.setColor(CONFLICT_COLOR_HEX);
+					(slot.outline.material as THREE.LineBasicMaterial).color.setHex(CONFLICT_COLOR_HEX);
+					(slot.outline.material as THREE.LineBasicMaterial).opacity = 0.95;
 				} else {
 					const band = aglBandFor(agl);
 					setHaloColor(slot.halo, band);
-					haloMat.opacity = 0.75;
+					haloMat.opacity = 0.4;
 					slot.stem.setColor(AGL_COLORS[band]);
+					(slot.outline.material as THREE.LineBasicMaterial).color.setHex(0xffffff);
+					(slot.outline.material as THREE.LineBasicMaterial).opacity = 0.9;
 				}
 
 				// Stem: from the GROUND (at terrain elevation) up to the

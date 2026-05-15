@@ -2,8 +2,10 @@ import maplibregl, { Map as MapLibreMap, type LngLatBoundsLike, type StyleSpecif
 import { CAMERA, DEMO_BBOX, SCENARIO_CENTER, basemapTileUrl, terrainTileUrl } from '../config';
 import { addPlaceLabels } from './places';
 import { addFirePerimeterLayers } from './firePerimeterLayer';
+import { addScenarioBoundaryLayer } from './scenarioBoundaryLayer';
 import { createTfrLayer } from './tfr';
 import { createAircraftLayer } from '../aircraft/AircraftLayer';
+import { mountAircraftPips } from '../aircraft/AircraftPips';
 import { getCurrentAircraft } from '../composables/useAircraftStore';
 import { getCurrentConflicts } from '../composables/useDeconfliction';
 
@@ -84,7 +86,7 @@ function buildStyle(): StyleSpecification {
 			'horizon-color': '#0a0d12',
 			'horizon-fog-blend': 1.0,
 			'fog-color': '#0a0d12',
-			'fog-ground-blend': 0.85,
+			'fog-ground-blend': 0.92,
 		},
 	};
 }
@@ -127,11 +129,14 @@ export function createMap(container: HTMLElement): MapLibreMap {
 
 	map.on('load', () => {
 		addFirePerimeterLayers(map);
+		// Boundary line BEFORE place labels so labels render on top of the line.
+		addScenarioBoundaryLayer(map);
 		addPlaceLabels(map);
 		// Order matters: TFR volume first, aircraft layer last so aircraft draw
 		// on top of (and read against) the translucent TFR walls.
 		map.addLayer(createTfrLayer());
 		map.addLayer(createAircraftLayer(getCurrentAircraft, getCurrentConflicts));
+		mountAircraftPips(map, getCurrentAircraft, getCurrentConflicts);
 	});
 
 	return map;
