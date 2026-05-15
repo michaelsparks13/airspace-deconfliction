@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { createMap } from '../map/setupMap';
+import { setMap } from '../composables/useMap';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 const containerEl = ref<HTMLDivElement | null>(null);
@@ -11,14 +12,15 @@ onMounted(() => {
 	if (!containerEl.value) return;
 	const map = createMap(containerEl.value);
 	mapRef.value = map;
+	setMap(map);
 
-	// Helpful during slice-1 verification — confirms terrain source is loading.
 	map.on('error', (e) => {
 		console.warn('[maplibre]', e?.error?.message ?? e);
 	});
 });
 
 onBeforeUnmount(() => {
+	setMap(null);
 	mapRef.value?.remove();
 	mapRef.value = null;
 });
