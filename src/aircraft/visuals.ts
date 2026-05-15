@@ -28,10 +28,15 @@ export function aglBandFor(aglMeters: number | null): AglBand {
 	return 'green';
 }
 
-const HALO_RADIUS_METERS = 60;
-const HALO_TUBE_METERS = 7;
+const HALO_RADIUS_METERS = 220;
+const HALO_TUBE_METERS = 40;
+const OUTLINE_RADIUS_METERS = 70;
 
-/** A flat torus that hovers around the aircraft at its altitude. */
+/**
+ * Soft additive glow that surrounds the aircraft at its altitude. The bigger
+ * radius + additive blending makes the silhouette pop against the dark
+ * basemap; the lower opacity stops it from washing out at close zoom.
+ */
 export function buildHaloRing(): THREE.Mesh {
 	const geom = new THREE.RingGeometry(
 		HALO_RADIUS_METERS - HALO_TUBE_METERS,
@@ -42,8 +47,9 @@ export function buildHaloRing(): THREE.Mesh {
 	const mat = new THREE.MeshBasicMaterial({
 		color: AGL_COLORS.unknown,
 		transparent: true,
-		opacity: 0.75,
+		opacity: 0.4,
 		side: THREE.DoubleSide,
+		blending: THREE.AdditiveBlending,
 		depthWrite: false,
 	});
 	const ring = new THREE.Mesh(geom, mat);
@@ -56,6 +62,31 @@ export function buildHaloRing(): THREE.Mesh {
 export function setHaloColor(ring: THREE.Mesh, band: AglBand): void {
 	const mat = ring.material as THREE.MeshBasicMaterial;
 	mat.color.setHex(AGL_COLORS[band]);
+}
+
+/**
+ * Crisp 1-px white outline ring sitting inside the glow. Keeps the aircraft
+ * silhouette readable when the soft halo bleeds into bright terrain or the
+ * fire perimeter.
+ */
+export function buildOutlineRing(): THREE.LineLoop {
+	const points: THREE.Vector3[] = [];
+	const segments = 48;
+	for (let i = 0; i < segments; i++) {
+		const a = (i / segments) * Math.PI * 2;
+		points.push(new THREE.Vector3(Math.cos(a) * OUTLINE_RADIUS_METERS, 0, Math.sin(a) * OUTLINE_RADIUS_METERS));
+	}
+	const geom = new THREE.BufferGeometry().setFromPoints(points);
+	const mat = new THREE.LineBasicMaterial({
+		color: 0xffffff,
+		transparent: true,
+		opacity: 0.9,
+		depthTest: false,
+		depthWrite: false,
+	});
+	const ring = new THREE.LineLoop(geom, mat);
+	ring.renderOrder = 999;
+	return ring;
 }
 
 /**

@@ -131,3 +131,36 @@ button:focus-visible {
 	font-style: italic;
 	font-weight: 400;
 }
+
+/* Screen-space aircraft pips. Always-visible white-outlined dots that survive
+   every zoom level — see src/aircraft/AircraftPips.ts. */
+.aircraft-pip {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	border: 2px solid #ffffff;
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.6),
+		0 0 8px rgba(0, 0, 0, 0.55);
+	pointer-events: none;
+	z-index: 5;
+}
+
+.aircraft-pip--conflict {
+	animation: aircraft-pip-pulse 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes aircraft-pip-pulse {
+	from {
+		transform: scale(1);
+		box-shadow:
+			0 0 0 1px rgba(0, 0, 0, 0.6),
+			0 0 8px var(--conflict-glow);
+	}
+	to {
+		transform: scale(1.25);
+		box-shadow:
+			0 0 0 1px rgba(0, 0, 0, 0.6),
+			0 0 16px var(--conflict);
+	}
+}
