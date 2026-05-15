@@ -1,5 +1,5 @@
-import maplibregl, { Map as MapLibreMap, type StyleSpecification } from 'maplibre-gl';
-import { CAMERA, SCENARIO_CENTER, basemapTileUrl, terrainTileUrl } from '../config';
+import maplibregl, { Map as MapLibreMap, type LngLatBoundsLike, type StyleSpecification } from 'maplibre-gl';
+import { CAMERA, DEMO_BBOX, SCENARIO_CENTER, basemapTileUrl, terrainTileUrl } from '../config';
 import { addPlaceLabels } from './places';
 import { addFirePerimeterLayers } from './firePerimeterLayer';
 import { createTfrLayer } from './tfr';
@@ -75,18 +75,30 @@ function buildStyle(): StyleSpecification {
 			source: 'terrainDem',
 			exaggeration: 1.0,
 		},
+		// Fog parameters are tuned to dissolve the edge of the loaded tile pack
+		// into the background — without this you get a visible black "cliff"
+		// where the terrain ends abruptly at the bbox edge.
 		sky: {
 			'sky-color': '#0a0d12',
-			'sky-horizon-blend': 0.4,
-			'horizon-color': '#1a2030',
-			'horizon-fog-blend': 0.5,
+			'sky-horizon-blend': 0.6,
+			'horizon-color': '#0a0d12',
+			'horizon-fog-blend': 1.0,
 			'fog-color': '#0a0d12',
-			'fog-ground-blend': 0.3,
+			'fog-ground-blend': 0.85,
 		},
 	};
 }
 
 export function createMap(container: HTMLElement): MapLibreMap {
+	// Clamp camera to the operational bbox so the user can't pan out into
+	// unloaded terrain (the bundled tile pack only covers DEMO_BBOX + buffer).
+	// Without this you can drag past the loaded area and reveal a black
+	// "sea-level cliff" where MapLibre projects unknown elevation to z=0.
+	const maxBounds: LngLatBoundsLike = [
+		[DEMO_BBOX.lonMin, DEMO_BBOX.latMin],
+		[DEMO_BBOX.lonMax, DEMO_BBOX.latMax],
+	];
+
 	const map = new maplibregl.Map({
 		container,
 		style: buildStyle(),
@@ -95,9 +107,9 @@ export function createMap(container: HTMLElement): MapLibreMap {
 		pitch: CAMERA.pitch,
 		bearing: CAMERA.bearing,
 		maxPitch: CAMERA.maxPitch,
-		// Antialias the GL context so future custom layers (three.js) look clean.
+		minZoom: 10,
+		maxBounds,
 		canvasContextAttributes: { antialias: true },
-		// We render terrain ourselves; no need for the built-in attribution overlap.
 		attributionControl: { compact: true },
 	});
 

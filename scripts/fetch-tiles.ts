@@ -31,10 +31,11 @@ const DEMO_BBOX = {
 } as const;
 
 // Pitched + rotated camera reaches outside the operational bbox; download a buffer
-// in each direction so the visible-tile set always lives on disk. 0.15° is a few
-// km of slack at this latitude — covers ~all reasonable pan/orbit before the user
-// would pan into wholly different terrain.
-const TILE_PACK_BUFFER_DEG = 0.15;
+// in each direction so the visible-tile set always lives on disk and the camera
+// horizon shows real terrain instead of a sea-level "cliff." 0.5° at this latitude
+// is roughly 50 km of slack to the north/south and ~45 km east/west — covers any
+// reasonable pan/orbit/zoom-out within the maxBounds.
+const TILE_PACK_BUFFER_DEG = 0.5;
 
 const FETCH_BBOX = {
 	lonMin: DEMO_BBOX.lonMin - TILE_PACK_BUFFER_DEG,

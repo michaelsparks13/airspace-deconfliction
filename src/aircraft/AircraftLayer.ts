@@ -24,7 +24,7 @@ import maplibregl, {
 	type CustomRenderMethodInput,
 	type Map as MapLibreMap,
 } from 'maplibre-gl';
-import { SCENARIO_CENTER } from '../config';
+import { AIRCRAFT_MESH_SCALE, SCENARIO_CENTER } from '../config';
 import type { Aircraft } from '../data/types';
 import type { ConflictPair } from '../deconfliction';
 import { buildAircraftMesh } from './models';
@@ -94,6 +94,10 @@ const MAX_CONFLICT_PAIRS = 32;
 function makeSlot(aircraft: Aircraft, scene: THREE.Scene): AircraftSlot {
 	const root = new THREE.Group();
 	const mesh = buildAircraftMesh(aircraft.category);
+	// Real-world aircraft sizes (~16 m helo, ~28 m tanker) are a couple of
+	// pixels at our demo zoom. Scale the silhouette up uniformly so the
+	// shape is legible; the halo ring stays at true 1 nm to anchor scale.
+	mesh.scale.setScalar(AIRCRAFT_MESH_SCALE);
 	const halo = buildHaloRing();
 	const stem = buildGroundStem(aircraft.crew);
 	root.add(mesh, halo, stem.object);

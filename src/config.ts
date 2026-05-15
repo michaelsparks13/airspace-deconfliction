@@ -9,7 +9,7 @@
 /** Fictional fire near Telluride/Silverton, San Juan Mountains. */
 export const SCENARIO_CENTER: [number, number] = [-107.80, 37.85];
 
-/** Bbox the offline tile pack covers, and the OpenSky bbox in live mode. */
+/** Bbox the offline tile pack covers. */
 export const DEMO_BBOX = {
 	lonMin: -108.10,
 	latMin: 37.60,
@@ -17,13 +17,22 @@ export const DEMO_BBOX = {
 	latMax: 38.10,
 } as const;
 
-/** Default camera. */
+/** Default camera. Zoom 13 frames the fire perimeter snugly while still
+ * showing the surrounding ridges; the matching maxBounds in setupMap.ts
+ * stops the user from panning past the bundled tile pack and revealing
+ * unloaded-terrain "cliffs." */
 export const CAMERA = {
-	zoom: 11,
+	zoom: 13,
 	pitch: 62,
 	bearing: -28,
 	maxPitch: 80,
 } as const;
+
+/** Aircraft mesh size multiplier. Real-world scale (16 m helo, 28 m tanker)
+ * is invisible at zoom 13 over 3D terrain — a few pixels. 6x scales the
+ * silhouettes to "obviously an aircraft" without making them look toy-sized
+ * next to the terrain. Halos remain 1 nm true. */
+export const AIRCRAFT_MESH_SCALE = 6;
 
 /** Deconfliction thresholds (FAA-ish "see and avoid" minima for portfolio purposes). */
 export const SEPARATION = {
@@ -51,12 +60,6 @@ export const REPLAY = {
 	hz: 1,
 	defaultSpeed: 1,
 	availableSpeeds: [1, 2, 4] as const,
-} as const;
-
-/** Live mode (OpenSky). */
-export const LIVE = {
-	pollMs: 10_000,
-	endpoint: 'https://opensky-network.org/api/states/all',
 } as const;
 
 /**

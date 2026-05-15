@@ -1,56 +1,28 @@
 /**
- * Single source of truth for the current aircraft fleet. Switches between
- * replay (default, offline) and live (OpenSky) modes via setMode().
+ * Single source of truth for the current aircraft fleet. Replay-only:
+ * the OpenSky live integration that used to live here was a portfolio
+ * stretch that didn't add demo value over a wilderness bbox, so it was
+ * removed. If a live source is needed later, drop it back in behind a
+ * mode ref and re-introduce the union here.
  *
- * Module-level singleton — created on first import — so the AircraftLayer
- * (outside the Vue tree) can read the same ref the panel + time bar do.
+ * Module-level singleton so the three.js AircraftLayer (outside the Vue
+ * tree) can read the same shallowRef the panel and time bar consume.
  */
 
-import { computed, ref, watch, type Ref, type ShallowRef } from 'vue';
 import type { Aircraft } from '../data/types';
+import type { ShallowRef } from 'vue';
 import { useReplay, type ReplayState } from './useReplay';
-import { useLive, type LiveState } from './useLive';
-
-export type DataMode = 'replay' | 'live';
 
 interface Store {
-	mode: Ref<DataMode>;
 	replay: ReplayState;
-	live: LiveState;
 	aircraft: ShallowRef<Aircraft[]>;
-	setMode: (m: DataMode) => void;
 }
 
 let singleton: Store | null = null;
 
 function build(): Store {
-	const mode = ref<DataMode>('replay');
 	const replay = useReplay();
-	const live = useLive();
-
-	const aircraft = computed<Aircraft[]>(() =>
-		mode.value === 'replay' ? replay.aircraft.value : live.aircraft.value,
-	) as unknown as ShallowRef<Aircraft[]>;
-
-	watch(
-		mode,
-		(m) => {
-			if (m === 'live') {
-				live.start();
-			} else {
-				live.stop();
-			}
-		},
-		{ immediate: true },
-	);
-
-	return {
-		mode,
-		replay,
-		live,
-		aircraft,
-		setMode: (m: DataMode) => { mode.value = m; },
-	};
+	return { replay, aircraft: replay.aircraft };
 }
 
 function ensure(): Store {
