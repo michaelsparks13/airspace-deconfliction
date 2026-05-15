@@ -1,0 +1,80 @@
+/* Dark tactical base — full-bleed map, hand-rolled CSS, no UI lib. */
+
+:root {
+	color-scheme: dark;
+
+	--bg: #0a0d12;
+	--bg-panel: #11151c;
+	--bg-panel-2: #181d26;
+	--border: #242b36;
+	--border-strong: #2f3845;
+	--text: #c7cdd6;
+	--text-dim: #7a8493;
+	--text-bright: #eef2f7;
+	--accent: #3aa3ff;
+	--accent-dim: rgba(58, 163, 255, 0.18);
+
+	--agl-red: #ff4d4d;
+	--agl-amber: #ffb938;
+	--agl-green: #4ade80;
+
+	--conflict: #ff3b3b;
+	--conflict-glow: rgba(255, 59, 59, 0.5);
+
+	--tfr-fill: rgba(255, 80, 80, 0.18);
+	--tfr-stroke: rgba(255, 80, 80, 0.65);
+
+	--sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--mono: ui-monospace, 'JetBrains Mono', SFMono-Regular, Menlo, monospace;
+
+	font: 14px/1.45 var(--sans);
+	color: var(--text);
+	background: var(--bg);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+}
+
+*, *::before, *::after {
+	box-sizing: border-box;
+}
+
+html, body, #app {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+
+button {
+	font: inherit;
+	color: inherit;
+	background: transparent;
+	border: 1px solid var(--border-strong);
+	border-radius: 4px;
+	padding: 6px 10px;
+	cursor: pointer;
+	transition: background 120ms, border-color 120ms;
+}
+
+button:hover {
+	background: var(--bg-panel-2);
+	border-color: var(--accent);
+}
+
+button:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+/* MapLibre attribution: keep readable on the dark canvas. */
+.maplibregl-ctrl-attrib {
+	background: rgba(10, 13, 18, 0.7) !important;
+	color: var(--text-dim) !important;
+	font-size: 10px !important;
+}
+
+.maplibregl-ctrl-attrib a {
+	color: var(--text-dim) !important;
+}
