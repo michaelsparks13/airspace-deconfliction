@@ -29,7 +29,7 @@ import {
 	AIRCRAFT_REFERENCE_ZOOM,
 	SCENARIO_CENTER,
 } from '../config';
-import type { Aircraft } from '../data/types';
+import type { Aircraft, AircraftCategory } from '../data/types';
 import type { ConflictPair } from '../deconfliction';
 import { buildAircraftMesh } from './models';
 import {
@@ -118,6 +118,21 @@ function makeSlot(aircraft: Aircraft, scene: THREE.Scene): AircraftSlot {
 function meshScaleForZoom(zoom: number): number {
 	return AIRCRAFT_REFERENCE_MESH_SCALE * Math.pow(2, AIRCRAFT_REFERENCE_ZOOM - zoom);
 }
+
+/**
+ * Per-category silhouette boost. Real-world sizes diverge wildly (a 28 m
+ * tanker dwarfs a 4 m quadcopter), and at default zoom the smaller meshes
+ * dissolve into the halo glow. Multiplying by these keeps every category
+ * legible without inflating real distances used elsewhere (halo radius,
+ * separation thresholds).
+ */
+const CATEGORY_MESH_BOOST: Record<AircraftCategory, number> = {
+	'air-tanker': 1.0,
+	'helo-type1': 2.4,
+	'recon-fw': 1.8,
+	'atgs-fw': 1.8,
+	'uas-sheriff': 4.5,
+};
 
 function disposeSlot(slot: AircraftSlot, scene: THREE.Scene): void {
 	scene.remove(slot.root);
@@ -248,7 +263,7 @@ export function createAircraftLayer(
 				// inside is modeled nose along +X; rotate around Y to true_track.
 				slot.root.position.set(east, a.altitudeMslMeters, north);
 				slot.mesh.rotation.y = -degToRad(a.trueTrackDeg - 90);
-				slot.mesh.scale.setScalar(meshScale);
+				slot.mesh.scale.setScalar(meshScale * CATEGORY_MESH_BOOST[a.category]);
 
 				// AGL via queryTerrainElevation. May be null before terrain
 				// tiles arrive — keep last known to avoid color flicker.

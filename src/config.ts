@@ -72,10 +72,9 @@ export const REPLAY = {
  * a curated list of POIs as MapLibre Markers (see src/map/places.ts).
  */
 export const TILES = {
-	// Dev uses the offline tile pack for snappy iteration; production deploys
-	// stay slim by streaming from AWS + CARTO CDN at runtime. import.meta.env.DEV
-	// is true under `vite` (dev server) and false under `vite build`.
-	useLocal: import.meta.env.DEV,
+	// Always stream from CDN — AWS terrarium + CARTO are fast enough that the
+	// offline tile pack isn't worth the deploy weight or DX overhead.
+	useLocal: false,
 	remote: {
 		terrarium: 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png',
 		basemap: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
