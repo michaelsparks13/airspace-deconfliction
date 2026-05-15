@@ -21,7 +21,7 @@ function buildStyle(): StyleSpecification {
 				attribution:
 					'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
 			},
-			terrain: {
+			terrainDem: {
 				type: 'raster-dem',
 				tiles: [terrainTileUrl()],
 				tileSize: 256,
@@ -29,6 +29,16 @@ function buildStyle(): StyleSpecification {
 				encoding: 'terrarium',
 				attribution:
 					'Terrain: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">Tilezen Joerd</a> (AWS Public Datasets)',
+			},
+			// MapLibre warns when one raster-dem is used for both terrain and hillshade.
+			// Use a second source pointing at the same tiles to silence the warning and
+			// follow the canonical MapLibre 3D-terrain example.
+			hillshadeDem: {
+				type: 'raster-dem',
+				tiles: [terrainTileUrl()],
+				tileSize: 256,
+				maxzoom: 14,
+				encoding: 'terrarium',
 			},
 		},
 		layers: [
@@ -46,7 +56,7 @@ function buildStyle(): StyleSpecification {
 			{
 				id: 'hillshade',
 				type: 'hillshade',
-				source: 'terrain',
+				source: 'hillshadeDem',
 				paint: {
 					'hillshade-shadow-color': '#000814',
 					'hillshade-highlight-color': '#7088a8',
@@ -56,7 +66,7 @@ function buildStyle(): StyleSpecification {
 			},
 		],
 		terrain: {
-			source: 'terrain',
+			source: 'terrainDem',
 			exaggeration: 1.0,
 		},
 		sky: {
