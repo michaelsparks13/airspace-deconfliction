@@ -6,7 +6,7 @@
  * (outside the Vue tree) can read the same ref the panel + time bar do.
  */
 
-import { computed, ref, watch, type ShallowRef } from 'vue';
+import { computed, ref, watch, type Ref, type ShallowRef } from 'vue';
 import type { Aircraft } from '../data/types';
 import { useReplay, type ReplayState } from './useReplay';
 import { useLive, type LiveState } from './useLive';
@@ -14,7 +14,7 @@ import { useLive, type LiveState } from './useLive';
 export type DataMode = 'replay' | 'live';
 
 interface Store {
-	mode: ReturnType<typeof ref<DataMode>>;
+	mode: Ref<DataMode>;
 	replay: ReplayState;
 	live: LiveState;
 	aircraft: ShallowRef<Aircraft[]>;

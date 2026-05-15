@@ -5,7 +5,7 @@ import { useAircraftStore, type DataMode } from '../composables/useAircraftStore
 const store = useAircraftStore();
 
 const mode = computed<DataMode>({
-	get: () => store.mode.value ?? 'replay',
+	get: () => store.mode.value,
 	set: (m) => store.setMode(m),
 });
 
