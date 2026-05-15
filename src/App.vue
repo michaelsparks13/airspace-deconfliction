@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import MapView from './components/MapView.vue';
 import TimeBar from './components/TimeBar.vue';
+import ConflictBanner from './components/ConflictBanner.vue';
 import { useAircraftStore } from './composables/useAircraftStore';
 
 // Instantiate the store at the root so its RAF loop lives for the app's
@@ -11,5 +12,6 @@ useAircraftStore();
 
 <template>
 	<MapView />
+	<ConflictBanner />
 	<TimeBar />
 </template>

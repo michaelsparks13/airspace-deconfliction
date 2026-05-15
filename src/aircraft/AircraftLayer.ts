@@ -26,6 +26,7 @@ import maplibregl, {
 } from 'maplibre-gl';
 import { SCENARIO_CENTER } from '../config';
 import type { Aircraft } from '../data/types';
+import type { ConflictPair } from '../deconfliction';
 import { buildAircraftMesh } from './models';
 import {
 	AGL_COLORS,
@@ -35,6 +36,15 @@ import {
 	setHaloColor,
 	type GroundStem,
 } from './visuals';
+
+/** Conflict halo override. Distinct from the AGL red so the two read differently. */
+const CONFLICT_COLOR_HEX = 0xff3b3b;
+const CONFLICT_LINE_COLOR_HEX = 0xff3b3b;
+/** Halo opacity range while pulsing. */
+const CONFLICT_PULSE_MIN = 0.35;
+const CONFLICT_PULSE_MAX = 0.95;
+/** Pulse frequency in Hz. */
+const CONFLICT_PULSE_HZ = 1.4;
 
 const SCENE_ORIGIN_LON = SCENARIO_CENTER[0];
 const SCENE_ORIGIN_LAT = SCENARIO_CENTER[1];
@@ -73,7 +83,13 @@ interface LayerState {
 	originMercator: maplibregl.MercatorCoordinate;
 	metersToMerc: number;
 	map: MapLibreMap;
+	/** One segments object rebuilt each frame from current conflict pairs. */
+	conflictLines: THREE.LineSegments;
+	/** Pre-allocated position buffer; size chosen to comfortably exceed real-world pair counts. */
+	conflictLinePositions: Float32Array;
 }
+
+const MAX_CONFLICT_PAIRS = 32;
 
 function makeSlot(aircraft: Aircraft, scene: THREE.Scene): AircraftSlot {
 	const root = new THREE.Group();
@@ -98,6 +114,7 @@ function disposeSlot(slot: AircraftSlot, scene: THREE.Scene): void {
 
 export function createAircraftLayer(
 	getAircraft: () => readonly Aircraft[],
+	getConflicts: () => readonly ConflictPair[] = () => [],
 ): CustomLayerInterface {
 	let state: LayerState | null = null;
 
@@ -130,6 +147,28 @@ export function createAircraftLayer(
 			});
 			renderer.autoClear = false;
 
+			// One LineSegments object whose vertex buffer is rewritten each frame
+			// from active conflict pairs. setDrawRange controls how many of the
+			// pre-allocated vertices are actually drawn.
+			const conflictLinePositions = new Float32Array(MAX_CONFLICT_PAIRS * 2 * 3);
+			const conflictGeom = new THREE.BufferGeometry();
+			conflictGeom.setAttribute(
+				'position',
+				new THREE.BufferAttribute(conflictLinePositions, 3),
+			);
+			const conflictMat = new THREE.LineDashedMaterial({
+				color: CONFLICT_LINE_COLOR_HEX,
+				dashSize: 60,
+				gapSize: 35,
+				transparent: true,
+				opacity: 0.9,
+				depthWrite: false,
+				linewidth: 2,
+			});
+			const conflictLines = new THREE.LineSegments(conflictGeom, conflictMat);
+			conflictLines.frustumCulled = false;
+			scene.add(conflictLines);
+
 			const originMercator = maplibregl.MercatorCoordinate.fromLngLat(
 				[SCENE_ORIGIN_LON, SCENE_ORIGIN_LAT],
 				0,
@@ -144,13 +183,32 @@ export function createAircraftLayer(
 				originMercator,
 				metersToMerc,
 				map,
+				conflictLines,
+				conflictLinePositions,
 			};
 		},
 
 		render(_gl: WebGLRenderingContext | WebGL2RenderingContext, args: CustomRenderMethodInput) {
 			if (!state) return;
 			const aircraft = getAircraft();
+			const conflicts = getConflicts();
+			const conflictIds = new Set<string>();
+			for (const c of conflicts) {
+				conflictIds.add(c.aId);
+				conflictIds.add(c.bId);
+			}
+
+			// Pulse phase from wall clock so independent layers can stay in sync.
+			const tSec = performance.now() / 1000;
+			const pulse =
+				CONFLICT_PULSE_MIN +
+				(CONFLICT_PULSE_MAX - CONFLICT_PULSE_MIN) *
+					(0.5 + 0.5 * Math.sin(2 * Math.PI * CONFLICT_PULSE_HZ * tSec));
+
 			const seen = new Set<string>();
+			// Cache east/north per id this frame to avoid recomputing for the
+			// conflict-line geometry pass below.
+			const positions = new Map<string, { east: number; north: number; alt: number }>();
 
 			// --- Add / update each aircraft -----------------------------------
 			for (const a of aircraft) {
@@ -162,15 +220,12 @@ export function createAircraftLayer(
 				}
 
 				const [east, north] = eastNorthMetersFromOrigin(a.lon, a.lat);
+				positions.set(a.id, { east, north, alt: a.altitudeMslMeters });
 
 				// Aircraft root sits at (east, altitude_msl, north). The mesh
 				// inside is modeled nose along +X; rotate around Y to true_track.
 				slot.root.position.set(east, a.altitudeMslMeters, north);
 				slot.mesh.rotation.y = -degToRad(a.trueTrackDeg - 90);
-
-				// Halo lives at the aircraft's altitude, centered on it. Mesh
-				// position is the same as the root, so the halo is local-origin
-				// at the group — already in place.
 
 				// AGL via queryTerrainElevation. May be null before terrain
 				// tiles arrive — keep last known to avoid color flicker.
@@ -181,25 +236,30 @@ export function createAircraftLayer(
 						: a.altitudeMslMeters - groundMsl;
 				slot.lastAgl = agl;
 
-				const band = aglBandFor(agl);
-				const hex = AGL_COLORS[band];
-				setHaloColor(slot.halo, band);
-				slot.stem.setColor(hex);
+				const inConflict = conflictIds.has(a.id);
+				const haloMat = slot.halo.material as THREE.MeshBasicMaterial;
+
+				if (inConflict) {
+					// Conflict override: pulse a distinct red, ignoring AGL band.
+					haloMat.color.setHex(CONFLICT_COLOR_HEX);
+					haloMat.opacity = pulse;
+					slot.stem.setColor(CONFLICT_COLOR_HEX);
+				} else {
+					const band = aglBandFor(agl);
+					setHaloColor(slot.halo, band);
+					haloMat.opacity = 0.75;
+					slot.stem.setColor(AGL_COLORS[band]);
+				}
 
 				// Stem: from the GROUND (at terrain elevation) up to the
-				// aircraft. The stem's geometry is anchored at the root's
-				// position, so its base needs to be at -altitudeMsl + groundMsl
-				// = -AGL. We model the line as (0, 0) -> (0, AGL) and then
-				// shift the line down by AGL so the top lands at the root.
+				// aircraft. Anchored at the root's position; base is at -AGL.
 				if (agl !== null && agl !== undefined) {
 					slot.stem.object.position.y = -agl;
 					slot.stem.setHeight(agl);
+					slot.stem.object.visible = true;
 				} else {
-					// No terrain yet — hide the stem rather than draw a wrong-length one.
 					slot.stem.object.visible = false;
-					continue;
 				}
-				slot.stem.object.visible = true;
 			}
 
 			// --- Remove slots that no longer have a corresponding aircraft ----
@@ -209,6 +269,31 @@ export function createAircraftLayer(
 					state.slots.delete(id);
 				}
 			}
+
+			// --- Conflict lines: connect each pair in 3D space ----------------
+			const buf = state.conflictLinePositions;
+			let pairCount = 0;
+			for (const c of conflicts) {
+				if (pairCount >= MAX_CONFLICT_PAIRS) break;
+				const pa = positions.get(c.aId);
+				const pb = positions.get(c.bId);
+				if (!pa || !pb) continue;
+				const o = pairCount * 6;
+				buf[o + 0] = pa.east;
+				buf[o + 1] = pa.alt;
+				buf[o + 2] = pa.north;
+				buf[o + 3] = pb.east;
+				buf[o + 4] = pb.alt;
+				buf[o + 5] = pb.north;
+				pairCount++;
+			}
+			const posAttr = state.conflictLines.geometry.getAttribute(
+				'position',
+			) as THREE.BufferAttribute;
+			posAttr.needsUpdate = true;
+			state.conflictLines.geometry.setDrawRange(0, pairCount * 2);
+			state.conflictLines.computeLineDistances();
+			state.conflictLines.visible = pairCount > 0;
 
 			// --- Compose the projection matrix --------------------------------
 			const mc = state.originMercator;

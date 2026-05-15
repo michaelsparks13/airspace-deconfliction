@@ -3,6 +3,7 @@ import { CAMERA, SCENARIO_CENTER, basemapTileUrl, terrainTileUrl } from '../conf
 import { addPlaceLabels } from './places';
 import { createAircraftLayer } from '../aircraft/AircraftLayer';
 import { getCurrentAircraft } from '../composables/useAircraftStore';
+import { getCurrentConflicts } from '../composables/useDeconfliction';
 
 /**
  * Build the MapLibre style: a single muted raster basemap, a terrarium-encoded
@@ -109,7 +110,7 @@ export function createMap(container: HTMLElement): MapLibreMap {
 
 	map.on('load', () => {
 		addPlaceLabels(map);
-		map.addLayer(createAircraftLayer(getCurrentAircraft));
+		map.addLayer(createAircraftLayer(getCurrentAircraft, getCurrentConflicts));
 	});
 
 	return map;
