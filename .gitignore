@@ -26,3 +26,4 @@ public/tiles/
 *.njsproj
 *.sln
 *.sw?
+.vercel
