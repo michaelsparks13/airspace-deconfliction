@@ -4,6 +4,7 @@ import MapView from './components/MapView.vue';
 import TimeBar from './components/TimeBar.vue';
 import ConflictBanner from './components/ConflictBanner.vue';
 import ModeToggle from './components/ModeToggle.vue';
+import SidePanel from './components/SidePanel.vue';
 import { useAircraftStore } from './composables/useAircraftStore';
 
 // Instantiate the store at the root so its RAF loop + live-mode polling live
@@ -16,5 +17,6 @@ const inReplayMode = computed(() => store.mode.value === 'replay');
 	<MapView />
 	<ConflictBanner />
 	<ModeToggle />
+	<SidePanel />
 	<TimeBar v-if="inReplayMode" />
 </template>
