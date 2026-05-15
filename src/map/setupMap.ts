@@ -2,6 +2,7 @@ import maplibregl, { Map as MapLibreMap, type StyleSpecification } from 'maplibr
 import { CAMERA, SCENARIO_CENTER, basemapTileUrl, terrainTileUrl } from '../config';
 import { addPlaceLabels } from './places';
 import { createAircraftLayer } from '../aircraft/AircraftLayer';
+import { SLICE4_FLEET } from '../data/fleet';
 
 /**
  * Build the MapLibre style: a single muted raster basemap, a terrarium-encoded
@@ -108,7 +109,7 @@ export function createMap(container: HTMLElement): MapLibreMap {
 
 	map.on('load', () => {
 		addPlaceLabels(map);
-		map.addLayer(createAircraftLayer());
+		map.addLayer(createAircraftLayer(() => SLICE4_FLEET));
 	});
 
 	return map;

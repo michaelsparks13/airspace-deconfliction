@@ -1,21 +1,21 @@
 /**
- * three.js CustomLayer that renders aircraft above 3D terrain at their real
- * MSL altitudes.
+ * three.js CustomLayer that renders the active aircraft fleet above 3D
+ * terrain at real MSL altitudes.
  *
- * The math (canonical MapLibre 3D-model-on-terrain pattern):
+ * Matrix math (canonical MapLibre 3D-model-on-terrain pattern):
  *
- *  - Pick a SCENE ORIGIN in lng/lat at altitude 0 (we use the scenario center).
- *  - Convert that origin to a MercatorCoordinate. Its (x, y, z) are the scene's
- *    place in Mercator space; its meterInMercatorCoordinateUnits() gives the
- *    scale that maps real-world meters to Mercator units AT that latitude.
- *  - The camera's projection matrix is the MapLibre projection matrix
- *    composed with a translate(scene-origin) · scale(metersToMerc) · mirror(Z)
- *    so the scene's local frame ends up as (east, up, north) in real meters.
- *  - Each aircraft is then placed in scene-local meters: east/north offsets
- *    from the origin, and Y = MSL altitude. Heading rotates around the
- *    vertical axis.
+ *  - SCENE ORIGIN is the scenario center at altitude 0. Its MercatorCoordinate
+ *    + meterInMercatorCoordinateUnits() give us the translate + scale that
+ *    composes with MapLibre's projection matrix to map a scene-local frame
+ *    in real meters (east, up, north) into clip space.
+ *  - Per aircraft we maintain a THREE.Group at a position computed in
+ *    east/north meters from the scene origin, with altitude as Y (up).
+ *  - Heading rotates the group around its local Y axis.
  *
- * Slice 3 hardcodes one helo. Slice 4 swaps in a fleet via the dataProvider.
+ *  AGL = altitudeMSL - queryTerrainElevation(lng, lat).
+ *  queryTerrainElevation returns null until terrain tiles load — when null
+ *  we keep the previous AGL (per-aircraft cache) so the halo color doesn't
+ *  flicker grey during pan/zoom.
  */
 
 import * as THREE from 'three';
@@ -25,30 +25,26 @@ import maplibregl, {
 	type Map as MapLibreMap,
 } from 'maplibre-gl';
 import { SCENARIO_CENTER } from '../config';
+import type { Aircraft } from '../data/types';
+import { buildAircraftMesh } from './models';
+import {
+	AGL_COLORS,
+	aglBandFor,
+	buildGroundStem,
+	buildHaloRing,
+	setHaloColor,
+	type GroundStem,
+} from './visuals';
 
 const SCENE_ORIGIN_LON = SCENARIO_CENTER[0];
 const SCENE_ORIGIN_LAT = SCENARIO_CENTER[1];
-
-// Hardcoded aircraft for Slice 3. Sits just east of Telluride, 2,750 m MSL
-// (~9,022 ft) — should be visibly above the ridges, below the high peaks.
-const STATIC_HELO = {
-	lng: -107.81,
-	lat: 37.84,
-	altitudeMeters: 2750,
-	headingDeg: 110,
-};
 
 function degToRad(d: number): number {
 	return (d * Math.PI) / 180;
 }
 
-/**
- * Approx meters-per-degree at a given latitude. Good enough at the scale
- * of a single fire (<100 km across); we're not navigating, just placing
- * meshes in a local tangent plane.
- */
 function metersPerDegLat(): number {
-	return 111_320; // mean value; varies by 1% across latitudes, irrelevant here.
+	return 111_320;
 }
 
 function metersPerDegLon(lat: number): number {
@@ -61,77 +57,48 @@ function eastNorthMetersFromOrigin(lng: number, lat: number): [number, number] {
 	return [east, north];
 }
 
-/** Build a low-poly procedural helicopter ~16 m long. */
-function buildHelo(): THREE.Group {
-	const group = new THREE.Group();
-
-	const bodyMat = new THREE.MeshStandardMaterial({
-		color: 0xcfd4dc,
-		metalness: 0.4,
-		roughness: 0.55,
-	});
-	const accentMat = new THREE.MeshStandardMaterial({
-		color: 0x8a93a3,
-		metalness: 0.5,
-		roughness: 0.45,
-	});
-	const discMat = new THREE.MeshStandardMaterial({
-		color: 0x9aa3b2,
-		transparent: true,
-		opacity: 0.25,
-		side: THREE.DoubleSide,
-	});
-
-	// Fuselage: stretched along east-west by default (heading 90°). We'll rotate
-	// the whole group at render time to point along true_track.
-	const fuselage = new THREE.Mesh(new THREE.BoxGeometry(9, 3, 3.5), bodyMat);
-	fuselage.position.y = 1.75;
-	group.add(fuselage);
-
-	// Tail boom
-	const tailBoom = new THREE.Mesh(new THREE.BoxGeometry(7, 1.0, 1.0), accentMat);
-	tailBoom.position.set(-6.5, 2.0, 0);
-	group.add(tailBoom);
-
-	// Vertical tail fin
-	const tailFin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.5, 0.3), accentMat);
-	tailFin.position.set(-9.5, 2.6, 0);
-	group.add(tailFin);
-
-	// Main rotor disc
-	const rotor = new THREE.Mesh(new THREE.CircleGeometry(7, 32), discMat);
-	rotor.rotation.x = -Math.PI / 2;
-	rotor.position.y = 4.2;
-	group.add(rotor);
-
-	// Tail rotor disc
-	const tailRotor = new THREE.Mesh(new THREE.CircleGeometry(1.4, 16), discMat);
-	tailRotor.rotation.y = Math.PI / 2;
-	tailRotor.position.set(-10.0, 2.6, 0.4);
-	group.add(tailRotor);
-
-	// Skid landing gear (a single thin box, both sides)
-	const skidGeom = new THREE.BoxGeometry(7, 0.15, 0.3);
-	const skidL = new THREE.Mesh(skidGeom, accentMat);
-	skidL.position.set(0, 0, -1.6);
-	const skidR = new THREE.Mesh(skidGeom, accentMat);
-	skidR.position.set(0, 0, 1.6);
-	group.add(skidL, skidR);
-
-	return group;
+interface AircraftSlot {
+	root: THREE.Group;
+	mesh: THREE.Group;
+	halo: THREE.Mesh;
+	stem: GroundStem;
+	lastAgl: number | null;
 }
 
 interface LayerState {
 	scene: THREE.Scene;
 	camera: THREE.Camera;
 	renderer: THREE.WebGLRenderer;
-	helo: THREE.Group;
+	slots: Map<string, AircraftSlot>;
 	originMercator: maplibregl.MercatorCoordinate;
 	metersToMerc: number;
 	map: MapLibreMap;
 }
 
-export function createAircraftLayer(): CustomLayerInterface {
+function makeSlot(aircraft: Aircraft, scene: THREE.Scene): AircraftSlot {
+	const root = new THREE.Group();
+	const mesh = buildAircraftMesh(aircraft.category);
+	const halo = buildHaloRing();
+	const stem = buildGroundStem(aircraft.crew);
+	root.add(mesh, halo, stem.object);
+	scene.add(root);
+	return { root, mesh, halo, stem, lastAgl: null };
+}
+
+function disposeSlot(slot: AircraftSlot, scene: THREE.Scene): void {
+	scene.remove(slot.root);
+	slot.root.traverse((obj) => {
+		if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+			obj.geometry?.dispose();
+			const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+			for (const m of mats) m?.dispose();
+		}
+	});
+}
+
+export function createAircraftLayer(
+	getAircraft: () => readonly Aircraft[],
+): CustomLayerInterface {
 	let state: LayerState | null = null;
 
 	return {
@@ -147,9 +114,6 @@ export function createAircraftLayer(): CustomLayerInterface {
 			sun.position.set(0.4, 1, 0.6).normalize();
 			scene.add(sun);
 			scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-
-			const helo = buildHelo();
-			scene.add(helo);
 
 			const renderer = new THREE.WebGLRenderer({
 				canvas: map.getCanvas(),
@@ -168,7 +132,7 @@ export function createAircraftLayer(): CustomLayerInterface {
 				scene,
 				camera,
 				renderer,
-				helo,
+				slots: new Map(),
 				originMercator,
 				metersToMerc,
 				map,
@@ -177,27 +141,68 @@ export function createAircraftLayer(): CustomLayerInterface {
 
 		render(_gl: WebGLRenderingContext | WebGL2RenderingContext, args: CustomRenderMethodInput) {
 			if (!state) return;
+			const aircraft = getAircraft();
+			const seen = new Set<string>();
 
-			// --- Place the aircraft in scene-local meters ---------------------
-			const [east, north] = eastNorthMetersFromOrigin(STATIC_HELO.lng, STATIC_HELO.lat);
-			state.helo.position.set(east, STATIC_HELO.altitudeMeters, north);
-			// Aircraft "nose" was modeled along +X (east, heading 90°). Rotating
-			// around the up axis: heading 0 = north, so we subtract 90° to align.
-			state.helo.rotation.y = -degToRad(STATIC_HELO.headingDeg - 90);
+			// --- Add / update each aircraft -----------------------------------
+			for (const a of aircraft) {
+				seen.add(a.id);
+				let slot = state.slots.get(a.id);
+				if (!slot) {
+					slot = makeSlot(a, state.scene);
+					state.slots.set(a.id, slot);
+				}
+
+				const [east, north] = eastNorthMetersFromOrigin(a.lon, a.lat);
+
+				// Aircraft root sits at (east, altitude_msl, north). The mesh
+				// inside is modeled nose along +X; rotate around Y to true_track.
+				slot.root.position.set(east, a.altitudeMslMeters, north);
+				slot.mesh.rotation.y = -degToRad(a.trueTrackDeg - 90);
+
+				// Halo lives at the aircraft's altitude, centered on it. Mesh
+				// position is the same as the root, so the halo is local-origin
+				// at the group — already in place.
+
+				// AGL via queryTerrainElevation. May be null before terrain
+				// tiles arrive — keep last known to avoid color flicker.
+				const groundMsl = state.map.queryTerrainElevation([a.lon, a.lat]);
+				const agl =
+					groundMsl === null || groundMsl === undefined
+						? slot.lastAgl
+						: a.altitudeMslMeters - groundMsl;
+				slot.lastAgl = agl;
+
+				const band = aglBandFor(agl);
+				const hex = AGL_COLORS[band];
+				setHaloColor(slot.halo, band);
+				slot.stem.setColor(hex);
+
+				// Stem: from the GROUND (at terrain elevation) up to the
+				// aircraft. The stem's geometry is anchored at the root's
+				// position, so its base needs to be at -altitudeMsl + groundMsl
+				// = -AGL. We model the line as (0, 0) -> (0, AGL) and then
+				// shift the line down by AGL so the top lands at the root.
+				if (agl !== null && agl !== undefined) {
+					slot.stem.object.position.y = -agl;
+					slot.stem.setHeight(agl);
+				} else {
+					// No terrain yet — hide the stem rather than draw a wrong-length one.
+					slot.stem.object.visible = false;
+					continue;
+				}
+				slot.stem.object.visible = true;
+			}
+
+			// --- Remove slots that no longer have a corresponding aircraft ----
+			for (const [id, slot] of state.slots) {
+				if (!seen.has(id)) {
+					disposeSlot(slot, state.scene);
+					state.slots.delete(id);
+				}
+			}
 
 			// --- Compose the projection matrix --------------------------------
-			//  M = mapProj · translate(originMerc) · scale(metersToMerc, -metersToMerc, metersToMerc)
-			//
-			// The Y-negation flips three.js's Y-up world into MapLibre's
-			// Z-up Mercator frame: after this, scene-local +Y points "up" in
-			// MapLibre, +X points east, +Z points south. Setting position with
-			// the third arg as +north then comes out correctly because we feed
-			// (east, up, north) and the matrix maps that to (east, -up, north)
-			// in MapLibre's coordinate frame... wait — see notes file.
-			//
-			// In practice the canonical example uses scale(s, -s, s) and ends
-			// up with the conventional (east, up, north) interpretation, so we
-			// match that exactly.
 			const mc = state.originMercator;
 			const s = state.metersToMerc;
 			const projection = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix);
@@ -214,6 +219,8 @@ export function createAircraftLayer(): CustomLayerInterface {
 
 		onRemove() {
 			if (state) {
+				for (const slot of state.slots.values()) disposeSlot(slot, state.scene);
+				state.slots.clear();
 				state.renderer.dispose();
 				state = null;
 			}
