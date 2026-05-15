@@ -59,7 +59,13 @@ export const LIVE = {
 	endpoint: 'https://opensky-network.org/api/states/all',
 } as const;
 
-/** Tile sources. Set USE_LOCAL=true once the offline tile pack is fetched (Slice 2). */
+/**
+ * Tile sources. Set useLocal=true once the offline tile pack is fetched (Slice 2).
+ *
+ * Labels are NOT a raster layer — population-scaled cartographic labels make
+ * Montrose dominant over an operationally-relevant Silverton. Instead we render
+ * a curated list of POIs as MapLibre Markers (see src/map/places.ts).
+ */
 export const TILES = {
 	useLocal: false,
 	remote: {

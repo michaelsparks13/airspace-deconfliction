@@ -1,5 +1,6 @@
 import maplibregl, { Map as MapLibreMap, type StyleSpecification } from 'maplibre-gl';
 import { CAMERA, SCENARIO_CENTER, basemapTileUrl, terrainTileUrl } from '../config';
+import { addPlaceLabels } from './places';
 
 /**
  * Build the MapLibre style: a single muted raster basemap, a terrarium-encoded
@@ -51,7 +52,7 @@ function buildStyle(): StyleSpecification {
 				id: 'basemap',
 				type: 'raster',
 				source: 'basemap',
-				paint: { 'raster-opacity': 0.85 },
+				paint: { 'raster-opacity': 0.9 },
 			},
 			{
 				id: 'hillshade',
@@ -103,6 +104,12 @@ export function createMap(container: HTMLElement): MapLibreMap {
 		}),
 		'top-left',
 	);
+
+	// Custom POI markers — added once the style is initialized so the underlying
+	// DOM container exists.
+	map.on('load', () => {
+		addPlaceLabels(map);
+	});
 
 	return map;
 }
