@@ -17,22 +17,24 @@ export const DEMO_BBOX = {
 	latMax: 38.10,
 } as const;
 
-/** Default camera. Zoom 13 frames the fire perimeter snugly while still
- * showing the surrounding ridges; the matching maxBounds in setupMap.ts
- * stops the user from panning past the bundled tile pack and revealing
- * unloaded-terrain "cliffs." */
+/** Default camera. Zoom 9 keeps the basemap legible and frames the fire
+ * inside a recognizable patch of San Juan terrain. Aircraft are scaled
+ * zoom-relative (see AIRCRAFT_REFERENCE_MESH_SCALE) so the silhouettes
+ * stay visible as the user zooms in/out. */
 export const CAMERA = {
-	zoom: 13,
+	zoom: 9,
 	pitch: 62,
 	bearing: -28,
 	maxPitch: 80,
 } as const;
 
-/** Aircraft mesh size multiplier. Real-world scale (16 m helo, 28 m tanker)
- * is invisible at zoom 13 over 3D terrain — a few pixels. 6x scales the
- * silhouettes to "obviously an aircraft" without making them look toy-sized
- * next to the terrain. Halos remain 1 nm true. */
-export const AIRCRAFT_MESH_SCALE = 6;
+/** Aircraft mesh scale at REFERENCE_ZOOM. AircraftLayer scales meshes
+ * by 2^(REFERENCE_ZOOM - currentZoom), so the on-screen size is roughly
+ * constant from zoom 8 to zoom 14. At zoom 13 (close-in) this gives a
+ * comfortable silhouette; at zoom 9 (default) the meshes auto-scale ~16x
+ * larger so the fleet stays visible. Halos remain 1 nm true-scale. */
+export const AIRCRAFT_REFERENCE_MESH_SCALE = 9;
+export const AIRCRAFT_REFERENCE_ZOOM = 13;
 
 /** Deconfliction thresholds (FAA-ish "see and avoid" minima for portfolio purposes). */
 export const SEPARATION = {

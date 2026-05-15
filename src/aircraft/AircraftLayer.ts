@@ -24,7 +24,11 @@ import maplibregl, {
 	type CustomRenderMethodInput,
 	type Map as MapLibreMap,
 } from 'maplibre-gl';
-import { AIRCRAFT_MESH_SCALE, SCENARIO_CENTER } from '../config';
+import {
+	AIRCRAFT_REFERENCE_MESH_SCALE,
+	AIRCRAFT_REFERENCE_ZOOM,
+	SCENARIO_CENTER,
+} from '../config';
 import type { Aircraft } from '../data/types';
 import type { ConflictPair } from '../deconfliction';
 import { buildAircraftMesh } from './models';
@@ -94,15 +98,22 @@ const MAX_CONFLICT_PAIRS = 32;
 function makeSlot(aircraft: Aircraft, scene: THREE.Scene): AircraftSlot {
 	const root = new THREE.Group();
 	const mesh = buildAircraftMesh(aircraft.category);
-	// Real-world aircraft sizes (~16 m helo, ~28 m tanker) are a couple of
-	// pixels at our demo zoom. Scale the silhouette up uniformly so the
-	// shape is legible; the halo ring stays at true 1 nm to anchor scale.
-	mesh.scale.setScalar(AIRCRAFT_MESH_SCALE);
 	const halo = buildHaloRing();
 	const stem = buildGroundStem(aircraft.crew);
 	root.add(mesh, halo, stem.object);
 	scene.add(root);
 	return { root, mesh, halo, stem, lastAgl: null };
+}
+
+/**
+ * Mesh scale that keeps the on-screen silhouette roughly constant as the
+ * user zooms in and out. 2^(refZoom - currentZoom) doubles the mesh size
+ * for every zoom level out — so a value of 9 at zoom 13 becomes ~144 at
+ * zoom 9 — matching how MapLibre's projection makes the same real-world
+ * distance shrink on screen.
+ */
+function meshScaleForZoom(zoom: number): number {
+	return AIRCRAFT_REFERENCE_MESH_SCALE * Math.pow(2, AIRCRAFT_REFERENCE_ZOOM - zoom);
 }
 
 function disposeSlot(slot: AircraftSlot, scene: THREE.Scene): void {
@@ -214,6 +225,10 @@ export function createAircraftLayer(
 			// conflict-line geometry pass below.
 			const positions = new Map<string, { east: number; north: number; alt: number }>();
 
+			// Zoom-relative mesh scale: keep silhouettes roughly constant size on
+			// screen as the user zooms in and out.
+			const meshScale = meshScaleForZoom(state.map.getZoom());
+
 			// --- Add / update each aircraft -----------------------------------
 			for (const a of aircraft) {
 				seen.add(a.id);
@@ -230,6 +245,7 @@ export function createAircraftLayer(
 				// inside is modeled nose along +X; rotate around Y to true_track.
 				slot.root.position.set(east, a.altitudeMslMeters, north);
 				slot.mesh.rotation.y = -degToRad(a.trueTrackDeg - 90);
+				slot.mesh.scale.setScalar(meshScale);
 
 				// AGL via queryTerrainElevation. May be null before terrain
 				// tiles arrive — keep last known to avoid color flicker.

@@ -89,16 +89,19 @@ function buildStyle(): StyleSpecification {
 	};
 }
 
-export function createMap(container: HTMLElement): MapLibreMap {
-	// Clamp camera to the operational bbox so the user can't pan out into
-	// unloaded terrain (the bundled tile pack only covers DEMO_BBOX + buffer).
-	// Without this you can drag past the loaded area and reveal a black
-	// "sea-level cliff" where MapLibre projects unknown elevation to z=0.
-	const maxBounds: LngLatBoundsLike = [
-		[DEMO_BBOX.lonMin, DEMO_BBOX.latMin],
-		[DEMO_BBOX.lonMax, DEMO_BBOX.latMax],
-	];
+/**
+ * The tile fetcher pre-loads DEMO_BBOX + a 0.5° buffer in every direction.
+ * Clamping the camera CENTER to a slightly tighter inner bbox keeps the
+ * full pitched view inside the loaded area at zoom 9 — the buffer absorbs
+ * the extra reach of the pitched-camera horizon.
+ */
+const PAN_BUFFER_DEG = 0.25;
+const maxBounds: LngLatBoundsLike = [
+	[DEMO_BBOX.lonMin - PAN_BUFFER_DEG, DEMO_BBOX.latMin - PAN_BUFFER_DEG],
+	[DEMO_BBOX.lonMax + PAN_BUFFER_DEG, DEMO_BBOX.latMax + PAN_BUFFER_DEG],
+];
 
+export function createMap(container: HTMLElement): MapLibreMap {
 	const map = new maplibregl.Map({
 		container,
 		style: buildStyle(),
@@ -107,7 +110,7 @@ export function createMap(container: HTMLElement): MapLibreMap {
 		pitch: CAMERA.pitch,
 		bearing: CAMERA.bearing,
 		maxPitch: CAMERA.maxPitch,
-		minZoom: 10,
+		minZoom: 8,
 		maxBounds,
 		canvasContextAttributes: { antialias: true },
 		attributionControl: { compact: true },
