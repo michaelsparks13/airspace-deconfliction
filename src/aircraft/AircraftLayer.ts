@@ -108,6 +108,14 @@ export function createAircraftLayer(
 
 		onAdd(map, gl) {
 			const scene = new THREE.Scene();
+			// Align scene-local axes with MapLibre's Mercator frame:
+			//   scene +X = east, scene +Y = up, scene +Z = north.
+			// This is the canonical MapLibre `add-a-3d-model-on-terrain` pattern.
+			// Setting positions as (east, up, north) in scene-local and rotating
+			// meshes around their local Y then corresponds to true heading rotation.
+			scene.rotateX(Math.PI / 2);
+			scene.scale.multiply(new THREE.Vector3(1, 1, -1));
+
 			const camera = new THREE.Camera();
 
 			const sun = new THREE.DirectionalLight(0xffffff, 1.4);
