@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Downloaded tile pack — fetched via `npm run fetch-tiles`. Source of truth is
+# scripts/fetch-tiles.ts; the binary tiles are derived artifacts.
+public/tiles/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -67,7 +67,7 @@ export const LIVE = {
  * a curated list of POIs as MapLibre Markers (see src/map/places.ts).
  */
 export const TILES = {
-	useLocal: false,
+	useLocal: true,
 	remote: {
 		terrarium: 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png',
 		basemap: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
