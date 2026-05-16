@@ -51,6 +51,12 @@ const CONFLICT_PULSE_MAX = 0.95;
 /** Pulse frequency in Hz. */
 const CONFLICT_PULSE_HZ = 1.4;
 
+/** Proximity-warning halo override. Steady amber — no pulse — so the operator
+ * gets "watch this" without alarm fatigue. */
+const WARNING_COLOR_HEX = 0xffb938;
+const WARNING_HALO_OPACITY = 0.55;
+const WARNING_OUTLINE_OPACITY = 0.9;
+
 const SCENE_ORIGIN_LON = SCENARIO_CENTER[0];
 const SCENE_ORIGIN_LAT = SCENARIO_CENTER[1];
 
@@ -148,6 +154,7 @@ function disposeSlot(slot: AircraftSlot, scene: THREE.Scene): void {
 export function createAircraftLayer(
 	getAircraft: () => readonly Aircraft[],
 	getConflicts: () => readonly ConflictPair[] = () => [],
+	getWarnings: () => readonly ConflictPair[] = () => [],
 ): CustomLayerInterface {
 	let state: LayerState | null = null;
 
@@ -225,10 +232,18 @@ export function createAircraftLayer(
 			if (!state) return;
 			const aircraft = getAircraft();
 			const conflicts = getConflicts();
+			const warnings = getWarnings();
 			const conflictIds = new Set<string>();
 			for (const c of conflicts) {
 				conflictIds.add(c.aId);
 				conflictIds.add(c.bId);
+			}
+			const warningIds = new Set<string>();
+			for (const w of warnings) {
+				// A pair already in conflict should NOT downgrade to warning visual.
+				if (conflictIds.has(w.aId) || conflictIds.has(w.bId)) continue;
+				warningIds.add(w.aId);
+				warningIds.add(w.bId);
 			}
 
 			// Pulse phase from wall clock so independent layers can stay in sync.
@@ -275,22 +290,31 @@ export function createAircraftLayer(
 				slot.lastAgl = agl;
 
 				const inConflict = conflictIds.has(a.id);
+				const inWarning = !inConflict && warningIds.has(a.id);
 				const haloMat = slot.halo.material as THREE.MeshBasicMaterial;
+				const outlineMat = slot.outline.material as THREE.LineBasicMaterial;
 
 				if (inConflict) {
 					// Conflict override: pulse a distinct red, ignoring AGL band.
 					haloMat.color.setHex(CONFLICT_COLOR_HEX);
 					haloMat.opacity = pulse;
 					slot.stem.setColor(CONFLICT_COLOR_HEX);
-					(slot.outline.material as THREE.LineBasicMaterial).color.setHex(CONFLICT_COLOR_HEX);
-					(slot.outline.material as THREE.LineBasicMaterial).opacity = 0.95;
+					outlineMat.color.setHex(CONFLICT_COLOR_HEX);
+					outlineMat.opacity = 0.95;
+				} else if (inWarning) {
+					// Steady amber — no pulse — so the cue reads "watch" not "alarm".
+					haloMat.color.setHex(WARNING_COLOR_HEX);
+					haloMat.opacity = WARNING_HALO_OPACITY;
+					slot.stem.setColor(WARNING_COLOR_HEX);
+					outlineMat.color.setHex(WARNING_COLOR_HEX);
+					outlineMat.opacity = WARNING_OUTLINE_OPACITY;
 				} else {
 					const band = aglBandFor(agl);
 					setHaloColor(slot.halo, band);
 					haloMat.opacity = 0.4;
 					slot.stem.setColor(AGL_COLORS[band]);
-					(slot.outline.material as THREE.LineBasicMaterial).color.setHex(0xffffff);
-					(slot.outline.material as THREE.LineBasicMaterial).opacity = 0.9;
+					outlineMat.color.setHex(0xffffff);
+					outlineMat.opacity = 0.9;
 				}
 
 				// Stem: from the GROUND (at terrain elevation) up to the

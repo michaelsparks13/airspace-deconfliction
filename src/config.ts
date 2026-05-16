@@ -42,6 +42,16 @@ export const SEPARATION = {
 	verticalMeters: 152.4,      // 500 ft
 } as const;
 
+/**
+ * Proximity warning thresholds — 2x the conflict bubble. A pair inside the
+ * warning radius but outside the conflict radius gets a steady amber cue so
+ * the operator has a few seconds of "watch this" before the pulsing red.
+ */
+export const PROXIMITY = {
+	lateralMeters: 3704,        // 2 nm
+	verticalMeters: 304.8,      // 1000 ft
+} as const;
+
 /** AGL color bands. Each upper bound is exclusive. */
 export const AGL_BANDS = {
 	redMaxMeters: 152.4,        // <  500 ft -> red

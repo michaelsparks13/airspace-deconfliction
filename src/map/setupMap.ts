@@ -7,7 +7,7 @@ import { createTfrLayer } from './tfr';
 import { createAircraftLayer } from '../aircraft/AircraftLayer';
 import { mountAircraftPips } from '../aircraft/AircraftPips';
 import { getCurrentAircraft } from '../composables/useAircraftStore';
-import { getCurrentConflicts } from '../composables/useDeconfliction';
+import { getCurrentConflicts, getCurrentWarnings } from '../composables/useDeconfliction';
 
 /**
  * Build the MapLibre style: a single muted raster basemap, a terrarium-encoded
@@ -135,8 +135,8 @@ export function createMap(container: HTMLElement): MapLibreMap {
 		// Order matters: TFR volume first, aircraft layer last so aircraft draw
 		// on top of (and read against) the translucent TFR walls.
 		map.addLayer(createTfrLayer());
-		map.addLayer(createAircraftLayer(getCurrentAircraft, getCurrentConflicts));
-		mountAircraftPips(map, getCurrentAircraft, getCurrentConflicts);
+		map.addLayer(createAircraftLayer(getCurrentAircraft, getCurrentConflicts, getCurrentWarnings));
+		mountAircraftPips(map, getCurrentAircraft, getCurrentConflicts, getCurrentWarnings);
 	});
 
 	return map;

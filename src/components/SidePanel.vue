@@ -10,7 +10,7 @@ import type { Aircraft, AircraftCategory } from '../data/types';
 import Legend from './Legend.vue';
 
 const store = useAircraftStore();
-const { conflictIds } = useDeconfliction();
+const { conflictIds, warningIds } = useDeconfliction();
 const mapRef = useMap();
 
 // Per-aircraft AGL recomputed at ~10 Hz off the store snapshot rather than
@@ -55,6 +55,7 @@ interface Row {
 	aglBand: 'red' | 'amber' | 'green' | 'unknown';
 	insideTfr: boolean;
 	inConflict: boolean;
+	inWarning: boolean;
 }
 
 function bandFor(agl: number | null): Row['aglBand'] {
@@ -68,12 +69,14 @@ const rows = computed<Row[]>(() => {
 	const list = store.aircraft.value;
 	return list.map((a) => {
 		const agl = aglCacheById.value[a.id] ?? null;
+		const inConflict = conflictIds.value.has(a.id);
 		return {
 			aircraft: a,
 			agl,
 			aglBand: bandFor(agl),
 			insideTfr: isInsideTfr(a.lon, a.lat),
-			inConflict: conflictIds.value.has(a.id),
+			inConflict,
+			inWarning: !inConflict && warningIds.value.has(a.id),
 		};
 	});
 });
@@ -81,6 +84,11 @@ const rows = computed<Row[]>(() => {
 const conflictsCount = computed(() => {
 	const { conflicts } = useDeconfliction();
 	return conflicts.value.length;
+});
+
+const warningsCount = computed(() => {
+	const { warnings } = useDeconfliction();
+	return warnings.value.length;
 });
 
 const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
@@ -99,6 +107,10 @@ const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
 					<div class="stat-key">conflicts</div>
 				</div>
 				<div class="stat">
+					<div class="stat-val" :class="{ warn: warningsCount > 0 }">{{ warningsCount }}</div>
+					<div class="stat-key">proximity</div>
+				</div>
+				<div class="stat">
 					<div class="stat-val">{{ inTfrCount }}/{{ rows.length }}</div>
 					<div class="stat-key">in TFR</div>
 				</div>
@@ -110,7 +122,11 @@ const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
 				v-for="row in rows"
 				:key="row.aircraft.id"
 				class="row"
-				:class="{ 'in-conflict': row.inConflict, 'in-tfr': row.insideTfr }"
+				:class="{
+					'in-conflict': row.inConflict,
+					'in-warning': row.inWarning,
+					'in-tfr': row.insideTfr,
+				}"
 			>
 				<div class="cell cell--icon">
 					<span
@@ -152,6 +168,7 @@ const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
 				</div>
 
 				<div v-if="row.inConflict" class="conflict-marker" aria-hidden="true" />
+				<div v-else-if="row.inWarning" class="warning-marker" aria-hidden="true" />
 			</li>
 		</ol>
 
@@ -226,6 +243,10 @@ const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
 	text-shadow: 0 0 8px var(--conflict-glow);
 }
 
+.stat-val.warn {
+	color: var(--agl-amber);
+}
+
 .stat-key {
 	font-size: 10px;
 	color: var(--text-dim);
@@ -268,6 +289,11 @@ const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
 	border-color: var(--conflict);
 	background: rgba(60, 12, 12, 0.55);
 	animation: row-pulse 1.5s ease-in-out infinite;
+}
+
+.row.in-warning {
+	border-color: var(--agl-amber);
+	background: rgba(56, 40, 8, 0.45);
 }
 
 @keyframes row-pulse {
@@ -393,5 +419,15 @@ const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
 	border-radius: 50%;
 	background: var(--conflict);
 	box-shadow: 0 0 6px var(--conflict);
+}
+
+.warning-marker {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--agl-amber);
 }
 </style>

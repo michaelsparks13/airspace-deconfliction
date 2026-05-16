@@ -1,11 +1,16 @@
 <script setup lang="ts">
 // Mirrors the values in src/aircraft/visuals.ts and src/config.ts so the
 // swatches stay in sync.
-import { AGL_BANDS } from '../config';
+import { AGL_BANDS, PROXIMITY, SEPARATION } from '../config';
 import { metersToFeet } from '../geo/units';
 
 const redMaxFt = Math.round(metersToFeet(AGL_BANDS.redMaxMeters));
 const amberMaxFt = Math.round(metersToFeet(AGL_BANDS.amberMaxMeters));
+
+const separationLatNm = (SEPARATION.lateralMeters / 1852).toFixed(0);
+const separationVertFt = Math.round(metersToFeet(SEPARATION.verticalMeters));
+const proximityLatNm = (PROXIMITY.lateralMeters / 1852).toFixed(0);
+const proximityVertFt = Math.round(metersToFeet(PROXIMITY.verticalMeters));
 </script>
 
 <template>
@@ -51,8 +56,12 @@ const amberMaxFt = Math.round(metersToFeet(AGL_BANDS.amberMaxMeters));
 				<span class="label">Fire perimeter / TFR</span>
 			</div>
 			<div class="swatches">
+				<span class="swatch swatch--ring amber"><span class="dot" /></span>
+				<span class="label">Proximity warning (&lt;&nbsp;{{ proximityLatNm }}&nbsp;nm / {{ proximityVertFt }}&nbsp;ft)</span>
+			</div>
+			<div class="swatches">
 				<span class="swatch swatch--ring conflict"><span class="dot" /></span>
-				<span class="label">Active separation conflict</span>
+				<span class="label">Separation conflict (&lt;&nbsp;{{ separationLatNm }}&nbsp;nm / {{ separationVertFt }}&nbsp;ft)</span>
 			</div>
 		</div>
 	</div>

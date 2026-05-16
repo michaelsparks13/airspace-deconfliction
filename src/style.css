@@ -150,6 +150,12 @@ button:focus-visible {
 	animation: aircraft-pip-pulse 0.7s ease-in-out infinite alternate;
 }
 
+.aircraft-pip--warning {
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.6),
+		0 0 10px rgba(255, 185, 56, 0.65);
+}
+
 @keyframes aircraft-pip-pulse {
 	from {
 		transform: scale(1);
