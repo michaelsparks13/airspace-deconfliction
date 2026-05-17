@@ -1,19 +1,21 @@
 /**
  * Generates src/data/mock-san-juans-fire.json — the 90s replay scenario.
  *
- * Five aircraft, each track defined here as a function of time t in seconds.
- * The script samples each track at 1 Hz and writes a per-track JSON file
- * (compact form: shared metadata once, then a samples array).
+ * Five aircraft, each track defined as a function of time t in seconds.
+ * Tracks are sampled at 1 Hz; AGL keyframes are converted to MSL against the
+ * local terrarium DEM, and BOTH aglMeters and altitudeMslMeters are emitted
+ * so the runtime deconfliction layer needs no terrain sampler.
  *
- * Engineered conflict window: T+42s..T+50s, when the air tanker pulls up
- * from a retardant run and the Type 1 helo descends toward its dip site
- * over the same drainage. By T+45s they're well under the 1 nm / 500 ft
- * separation minima — the deconfliction UI (slice 6) should fire visibly
- * during the demo without anyone needing to scrub for it.
+ * Each track is also tagged with its ATGS-assigned stack block (from
+ * config.STACK), its participant flag, and an optional operationId.
  *
- * Altitudes are specified as AGL (above ground level). Terrain MSL is sampled
- * from the local terrarium tile pack so flight tracks track real San Juan
- * topography — no more aircraft 2,000 ft underground.
+ * Engineered events (after this rewrite):
+ *   - Eagle 1 (sheriff UAS) is a NON-PARTICIPANT inside the TFR -> persistent
+ *     intruder alert for the whole run.
+ *   - Tanker 21 descends below its assigned TANKER block onto the retardant
+ *     run (~T+18..T+46) -> block-bust.
+ *   - Tanker 21 and 5H converge near the fire's NE edge at T+42..T+50 ->
+ *     stack-proximity (critical), surfaced early by CPA lookahead.
  *
  *   npm run generate-scenario
  */
@@ -22,7 +24,8 @@ import { writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PNG } from 'pngjs';
-import type { AircraftCategory, CrewType } from '../src/data/types.ts';
+import { STACK } from '../src/config.ts';
+import type { AircraftCategory, AltitudeBlock, CrewType } from '../src/data/types.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const OUTPUT = resolve(ROOT, 'src', 'data', 'mock-san-juans-fire.json');
@@ -30,15 +33,10 @@ const TILES_DIR = resolve(ROOT, 'public', 'tiles', 'terrarium');
 
 const DURATION_SECONDS = 90;
 const HZ = 1;
-// Sample terrain at the same LOD MapLibre uses at the default camera zoom (~9.85).
-// Higher-zoom terrarium tiles encode more detail than the rendered terrain mesh
-// uses, so picking those produces "true" elevations that are LOWER than the
-// runtime's smoothed value over ridges — leaving aircraft visibly underground at
-// transient moments. Matching the runtime's LOD keeps panel AGL > 0 always.
 const DEM_ZOOM = 10;
 
 // -----------------------------------------------------------------------------
-//  Terrarium DEM sampler — reads cached zoom-13 tiles and decodes elevation.
+//  Terrarium DEM sampler
 // -----------------------------------------------------------------------------
 
 interface DecodedTile {
@@ -116,14 +114,14 @@ function sampleTerrainMsl(lat: number, lon: number): number {
 }
 
 // -----------------------------------------------------------------------------
-//  Track-builder helpers — keyframes specify lat/lon + AGL.
+//  Track-builder helpers
 // -----------------------------------------------------------------------------
 
 interface Keyframe {
-	t: number;             // seconds
+	t: number;
 	lat: number;
 	lon: number;
-	aglMeters: number;     // height above ground level
+	aglMeters: number;
 	headingDeg: number;
 	gsMps: number;
 	vrateMps: number;
@@ -133,7 +131,6 @@ function lerp(a: number, b: number, k: number): number {
 	return a + (b - a) * k;
 }
 
-/** Heading lerp that takes the short way around the circle. */
 function lerpHeading(a: number, b: number, k: number): number {
 	let d = b - a;
 	if (d > 180) d -= 360;
@@ -211,15 +208,12 @@ function orbitKeyframes(opts: {
 }
 
 // -----------------------------------------------------------------------------
-//  Track definitions — AGL profiles by aircraft type
+//  Track definitions
 // -----------------------------------------------------------------------------
 
 /**
- * Type 1 helicopter — bucket drop cycle. Sits at operationally realistic AGL:
- *   T+0..T+30   : returning from dip site, ~60 m (200 ft) AGL transit.
- *   T+30..T+50  : descending toward dip site (the conflict window). Drops to
- *                 30 m AGL by T+45 — overlaps Tanker 21's climb-out altitude.
- *   T+50..T+90  : at dip site over a ~3,000 m drainage, ~5 m AGL hover.
+ * Type 1 helicopter — bucket drop cycle. Stays in the ROTOR block (sfc–500 ft
+ * AGL) throughout; descends toward the dip site during the conflict window.
  */
 const HELO_KEYS: Keyframe[] = [
 	{ t: 0,  lat: 37.8410, lon: -107.8260, aglMeters: 60, headingDeg: 50,  gsMps: 36, vrateMps: 0 },
@@ -233,14 +227,10 @@ const HELO_KEYS: Keyframe[] = [
 ];
 
 /**
- * Air tanker — retardant run + climb-out. The conflict at T+42..T+50 happens
- * because the tanker is climbing through 50-150 m AGL just as 5H descends
- * through the same band over the same drainage.
+ * Air tanker — retardant run + climb-out. Descends to ~80 m AGL on the run,
+ * which is below the TANKER block floor (122 m) -> a block-bust during the
+ * run; converges with 5H near the fire edge at T+42..T+50.
  */
-// Tanker AGL minimums are padded ~30 m above the operational floor: MapLibre's
-// runtime terrain query uses lower-LOD tiles than this script's zoom-13 sample,
-// and the difference can push the rendered AGL slightly below the literal value.
-// The padding keeps the panel display unambiguously positive at all replay times.
 const TANKER_KEYS: Keyframe[] = [
 	{ t: 0,  lat: 37.7900, lon: -107.8100, aglMeters: 250, headingDeg: 5,   gsMps: 75, vrateMps: 0 },
 	{ t: 20, lat: 37.8350, lon: -107.8050, aglMeters: 110, headingDeg: 0,   gsMps: 78, vrateMps: -1 },
@@ -251,7 +241,7 @@ const TANKER_KEYS: Keyframe[] = [
 	{ t: 90, lat: 37.8670, lon: -107.6900, aglMeters: 740, headingDeg: 90,  gsMps: 82, vrateMps: 4 },
 ];
 
-/** Recon fixed-wing — left orbit NE of fire at ~2,500 ft AGL. */
+/** Recon fixed-wing — left orbit NE of fire, in the RECON block. */
 const RECON_KEYS = orbitKeyframes({
 	centerLat: 37.8950,
 	centerLon: -107.7400,
@@ -262,7 +252,7 @@ const RECON_KEYS = orbitKeyframes({
 	startPhase: 0,
 });
 
-/** ATGS air-attack — higher, wider orbit south of fire, ~3,500 ft AGL. */
+/** ATGS air-attack — higher, wider orbit south of fire, in the ATGS block. */
 const ATGS_KEYS = orbitKeyframes({
 	centerLat: 37.8150,
 	centerLon: -107.8250,
@@ -273,7 +263,8 @@ const ATGS_KEYS = orbitKeyframes({
 	startPhase: Math.PI / 2,
 });
 
-/** Sheriff UAS — holding 400 ft AGL over structure protection corner. */
+/** Sheriff UAS — holding ~400 ft AGL over a structure-protection corner.
+ *  Modeled as a NON-PARTICIPANT: not checked in to the FTA. */
 const UAS_KEYS: Keyframe[] = [
 	{ t: 0,  lat: 37.8420, lon: -107.8150, aglMeters: 120, headingDeg: 180, gsMps: 6, vrateMps: 0 },
 	{ t: 90, lat: 37.8380, lon: -107.8150, aglMeters: 120, headingDeg: 180, gsMps: 6, vrateMps: 0 },
@@ -288,15 +279,17 @@ interface TrackManifest {
 	callsign: string;
 	category: AircraftCategory;
 	crew: CrewType;
+	participant: boolean;
+	operationId?: string;
 	keys: Keyframe[];
 }
 
 const TRACKS: TrackManifest[] = [
-	{ id: 'helo-5H',         callsign: '5H',             category: 'helo-type1',  crew: 'manned', keys: HELO_KEYS },
-	{ id: 'tanker-21',       callsign: 'Tanker 21',      category: 'air-tanker',  crew: 'manned', keys: TANKER_KEYS },
-	{ id: 'recon-N142',      callsign: 'Recon 142',      category: 'recon-fw',    crew: 'manned', keys: RECON_KEYS },
-	{ id: 'atgs-air-attack', callsign: 'Air Attack 12',  category: 'atgs-fw',     crew: 'manned', keys: ATGS_KEYS },
-	{ id: 'uas-sheriff-1',   callsign: 'Eagle 1',        category: 'uas-sheriff', crew: 'uas',    keys: UAS_KEYS },
+	{ id: 'helo-5H',         callsign: '5H',            category: 'helo-type1',  crew: 'manned', participant: true,  keys: HELO_KEYS },
+	{ id: 'tanker-21',       callsign: 'Tanker 21',     category: 'air-tanker',  crew: 'manned', participant: true,  keys: TANKER_KEYS },
+	{ id: 'recon-N142',      callsign: 'Recon 142',     category: 'recon-fw',    crew: 'manned', participant: true,  keys: RECON_KEYS },
+	{ id: 'atgs-air-attack', callsign: 'Air Attack 12', category: 'atgs-fw',     crew: 'manned', participant: true,  keys: ATGS_KEYS },
+	{ id: 'uas-sheriff-1',   callsign: 'Eagle 1',       category: 'uas-sheriff', crew: 'uas',    participant: false, keys: UAS_KEYS },
 ];
 
 // -----------------------------------------------------------------------------
@@ -308,6 +301,7 @@ interface Sample {
 	lat: number;
 	lon: number;
 	altitudeMslMeters: number;
+	aglMeters: number;
 	trueTrackDeg: number;
 	groundspeedMps: number;
 	verticalRateMps: number;
@@ -340,6 +334,7 @@ function sampleAll(track: TrackManifest): SampleResult {
 			lat: round(s.lat, 6),
 			lon: round(s.lon, 6),
 			altitudeMslMeters: round(altMsl, 1),
+			aglMeters: round(s.aglMeters, 1),
 			trueTrackDeg: round(s.headingDeg, 1),
 			groundspeedMps: round(s.gsMps, 2),
 			verticalRateMps: round(s.vrateMps, 2),
@@ -347,6 +342,8 @@ function sampleAll(track: TrackManifest): SampleResult {
 	}
 	return { samples: out, minAgl, maxAgl };
 }
+
+interface AltitudeBlockJson extends AltitudeBlock {}
 
 interface ReplayFile {
 	durationSeconds: number;
@@ -357,6 +354,9 @@ interface ReplayFile {
 		callsign: string;
 		category: AircraftCategory;
 		crew: CrewType;
+		assignedBlock: AltitudeBlockJson;
+		operationId?: string;
+		participant: boolean;
 		samples: Sample[];
 	}>;
 }
@@ -367,14 +367,19 @@ const file: ReplayFile = {
 	durationSeconds: DURATION_SECONDS,
 	hz: HZ,
 	notes:
-		'Generated by scripts/generate-scenario.ts. Altitudes are terrain-aware ' +
-		'(AGL profiles sampled against zoom-13 terrarium DEM). ' +
-		'Engineered conflict between Tanker 21 (climbing post-drop) and 5H (descending to dip site) at T+42..T+50.',
+		'Generated by scripts/generate-scenario.ts. Each sample carries both ' +
+		'aglMeters and altitudeMslMeters (terrain-aware, zoom-10 terrarium DEM). ' +
+		'Tracks are tagged with ATGS-assigned stack blocks. Engineered events: ' +
+		'Eagle 1 is a non-participant intruder in the TFR; Tanker 21 block-busts ' +
+		'on its retardant run and converges with 5H at T+42..T+50.',
 	tracks: sampled.map(({ tr, sr }) => ({
 		id: tr.id,
 		callsign: tr.callsign,
 		category: tr.category,
 		crew: tr.crew,
+		assignedBlock: STACK[tr.category],
+		operationId: tr.operationId,
+		participant: tr.participant,
 		samples: sr.samples,
 	})),
 };

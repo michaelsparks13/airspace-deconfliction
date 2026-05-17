@@ -30,7 +30,11 @@ import {
 	SCENARIO_CENTER,
 } from '../config';
 import type { Aircraft } from '../data/types';
-import type { ConflictPair } from '../deconfliction';
+import {
+	aircraftIdsInConflicts,
+	conflictLinePairs,
+	type Conflict,
+} from '../deconfliction';
 import { buildAircraftMesh } from './models';
 import {
 	AGL_COLORS,
@@ -138,8 +142,7 @@ function disposeSlot(slot: AircraftSlot, scene: THREE.Scene): void {
 
 export function createAircraftLayer(
 	getAircraft: () => readonly Aircraft[],
-	getConflicts: () => readonly ConflictPair[] = () => [],
-	getWarnings: () => readonly ConflictPair[] = () => [],
+	getConflicts: () => readonly Conflict[] = () => [],
 ): CustomLayerInterface {
 	let state: LayerState | null = null;
 
@@ -217,18 +220,10 @@ export function createAircraftLayer(
 			if (!state) return;
 			const aircraft = getAircraft();
 			const conflicts = getConflicts();
-			const warnings = getWarnings();
-			const conflictIds = new Set<string>();
-			for (const c of conflicts) {
-				conflictIds.add(c.aId);
-				conflictIds.add(c.bId);
-			}
+			const conflictIds = aircraftIdsInConflicts(conflicts, 'critical');
 			const warningIds = new Set<string>();
-			for (const w of warnings) {
-				// A pair already in conflict should NOT downgrade to warning visual.
-				if (conflictIds.has(w.aId) || conflictIds.has(w.bId)) continue;
-				warningIds.add(w.aId);
-				warningIds.add(w.bId);
+			for (const id of aircraftIdsInConflicts(conflicts, 'advisory')) {
+				if (!conflictIds.has(id)) warningIds.add(id);
 			}
 
 			// Pulse phase from wall clock so independent layers can stay in sync.
@@ -321,13 +316,14 @@ export function createAircraftLayer(
 				}
 			}
 
-			// --- Conflict lines: connect each pair in 3D space ----------------
+			// --- Conflict lines: stack-proximity pairs only -------------------
+			const linePairs = conflictLinePairs(conflicts);
 			const buf = state.conflictLinePositions;
 			let pairCount = 0;
-			for (const c of conflicts) {
+			for (const pair of linePairs) {
 				if (pairCount >= MAX_CONFLICT_PAIRS) break;
-				const pa = positions.get(c.aId);
-				const pb = positions.get(c.bId);
+				const pa = positions.get(pair.aId);
+				const pb = positions.get(pair.bId);
 				if (!pa || !pb) continue;
 				const o = pairCount * 6;
 				buf[o + 0] = pa.east;

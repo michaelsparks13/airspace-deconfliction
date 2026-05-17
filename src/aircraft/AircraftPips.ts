@@ -8,7 +8,7 @@
 
 import maplibregl, { type Map as MapLibreMap, type Marker } from 'maplibre-gl';
 import type { Aircraft } from '../data/types';
-import type { ConflictPair } from '../deconfliction';
+import { aircraftIdsInConflicts, type Conflict } from '../deconfliction';
 import { AGL_COLORS, aglBandFor } from './visuals';
 
 const PIP_CONFLICT_COLOR = '#ff3b3b';
@@ -31,8 +31,7 @@ function applyPipStyle(el: HTMLDivElement, color: string, state: PipState): void
 export function mountAircraftPips(
 	map: MapLibreMap,
 	getAircraft: () => readonly Aircraft[],
-	getConflicts: () => readonly ConflictPair[] = () => [],
-	getWarnings: () => readonly ConflictPair[] = () => [],
+	getConflicts: () => readonly Conflict[] = () => [],
 ): () => void {
 	const markers = new Map<string, { marker: Marker; el: HTMLDivElement; lastAgl: number | null }>();
 	let rafId = 0;
@@ -42,17 +41,10 @@ export function mountAircraftPips(
 		if (cancelled) return;
 		const aircraft = getAircraft();
 		const conflicts = getConflicts();
-		const warnings = getWarnings();
-		const conflictIds = new Set<string>();
-		for (const c of conflicts) {
-			conflictIds.add(c.aId);
-			conflictIds.add(c.bId);
-		}
+		const conflictIds = aircraftIdsInConflicts(conflicts, 'critical');
 		const warningIds = new Set<string>();
-		for (const w of warnings) {
-			if (conflictIds.has(w.aId) || conflictIds.has(w.bId)) continue;
-			warningIds.add(w.aId);
-			warningIds.add(w.bId);
+		for (const id of aircraftIdsInConflicts(conflicts, 'advisory')) {
+			if (!conflictIds.has(id)) warningIds.add(id);
 		}
 
 		const seen = new Set<string>();

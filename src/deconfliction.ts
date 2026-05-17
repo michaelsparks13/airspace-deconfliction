@@ -1,96 +1,311 @@
 /**
- * Pairwise separation check.
+ * Fireground deconfliction.
  *
- * Pure: input is a fleet snapshot, output is a list of pairs in conflict.
- * No dependencies on Vue, MapLibre, or three.js. Thresholds come from
- * config.ts so the bands stay tunable in one place.
+ * This is NOT en-route conflict detection. Over a wildland fire, separation
+ * is not a fixed bubble — aircraft converge on drops by design. The model
+ * here is the one an Air Tactical Group Supervisor actually runs:
  *
- * A pair is in conflict iff lateral separation < SEPARATION.lateralMeters
- * AND vertical separation < SEPARATION.verticalMeters at the same instant.
- * Lateral uses haversine over (lat, lon); vertical is abs(MSL diff).
+ *   1. block-bust       — an aircraft is outside its ATGS-assigned altitude
+ *                         block (the "stack"). The primary check.
+ *   2. stack-proximity  — two aircraft are predicted to pass within an unsafe
+ *                         slant range (closest-approach lookahead), and are
+ *                         not sequenced into the same operation.
+ *   3. column-incursion — an aircraft has entered the convective column,
+ *                         the no-fly core over the fire.
+ *   4. intruder         — a non-participant aircraft is inside the TFR.
  *
- * Complexity is O(n^2) — fine for the demo's fleet of 5 and entirely
- * acceptable up to a few hundred aircraft. Spatial bucketing would be the
- * obvious next step at production scale.
+ * Pure: input is a fleet snapshot + the FTA; output is a list of typed,
+ * severity-ranked conflicts. No Vue, no MapLibre, no three.js.
+ *
+ * Vertical reasoning uses two frames deliberately:
+ *   - block / zone checks use AGL (the stack is defined above ground), and
+ *   - stack-proximity uses true MSL slant range (collision risk is geometric).
+ * Both are consistent because the scenario bakes AGL and MSL from one DEM.
+ *
+ * Complexity O(n^2) for the pairwise pass — fine for a fireground fleet.
+ * Spatial bucketing is the obvious next step at production scale.
  */
 
-import { PROXIMITY, SEPARATION } from './config';
+import { DECONFLICTION } from './config';
 import type { Aircraft } from './data/types';
-import { haversineMeters } from './geo/haversine';
+import { metersToFeet } from './geo/units';
+import {
+	isInsideTfrCylinder,
+	isInsideZone,
+	type FireTrafficArea,
+} from './fta';
 
-export interface ConflictPair {
+export type Severity = 'advisory' | 'caution' | 'critical';
+
+export interface BlockBustConflict {
+	kind: 'block-bust';
+	severity: Severity;
+	id: string;
+	callsign: string;
+	edge: 'floor' | 'ceiling';
+	/** Signed AGL exceedance, meters: negative = below floor, positive = above ceiling. */
+	exceedanceMeters: number;
+}
+
+export interface StackProximityConflict {
+	kind: 'stack-proximity';
+	severity: Severity;
 	aId: string;
 	bId: string;
 	aCallsign: string;
 	bCallsign: string;
-	lateralMeters: number;
-	verticalMeters: number;
+	/** Slant range right now, meters. */
+	slantMetersNow: number;
+	/** Predicted minimum slant range over the lookahead horizon, meters. */
+	cpaSlantMeters: number;
+	/** Seconds until that closest approach (0 = closing now / already past). */
+	secondsToCpa: number;
 }
 
-/** Same shape as ConflictPair — emitted for pairs inside the warning bubble
- * but outside the conflict bubble. Helps the operator see a pair coming
- * together before it crosses the minima. */
-export type WarningPair = ConflictPair;
+export interface ColumnIncursionConflict {
+	kind: 'column-incursion';
+	severity: Severity;
+	id: string;
+	callsign: string;
+	zoneId: string;
+}
 
-export function detectConflicts(aircraft: readonly Aircraft[]): ConflictPair[] {
-	const out: ConflictPair[] = [];
-	for (let i = 0; i < aircraft.length; i++) {
-		const a = aircraft[i];
-		for (let j = i + 1; j < aircraft.length; j++) {
-			const b = aircraft[j];
-			const vert = Math.abs(a.altitudeMslMeters - b.altitudeMslMeters);
-			if (vert >= SEPARATION.verticalMeters) continue;
-			const lat = haversineMeters(a.lat, a.lon, b.lat, b.lon);
-			if (lat >= SEPARATION.lateralMeters) continue;
-			out.push({
-				aId: a.id,
-				bId: b.id,
-				aCallsign: a.callsign,
-				bCallsign: b.callsign,
-				lateralMeters: lat,
-				verticalMeters: vert,
-			});
-		}
-	}
-	return out;
+export interface IntruderConflict {
+	kind: 'intruder';
+	severity: Severity;
+	id: string;
+	callsign: string;
+}
+
+export type Conflict =
+	| BlockBustConflict
+	| StackProximityConflict
+	| ColumnIncursionConflict
+	| IntruderConflict;
+
+const SEVERITY_RANK: Record<Severity, number> = {
+	critical: 0,
+	caution: 1,
+	advisory: 2,
+};
+
+// -----------------------------------------------------------------------------
+//  Kinematics — local ENU projection + closest-approach prediction.
+// -----------------------------------------------------------------------------
+
+interface Kinematic {
+	x: number;   // east, meters from FTA center
+	y: number;   // north, meters from FTA center
+	z: number;   // MSL altitude, meters
+	vx: number;  // east velocity, m/s
+	vy: number;  // north velocity, m/s
+	vz: number;  // vertical velocity, m/s
+}
+
+const M_PER_DEG_LAT = 111_320;
+
+function mPerDegLon(lat: number): number {
+	return 111_320 * Math.cos((lat * Math.PI) / 180);
+}
+
+function kinematicOf(a: Aircraft, refLat: number, refLon: number): Kinematic {
+	const trackRad = (a.trueTrackDeg * Math.PI) / 180;
+	return {
+		x: (a.lon - refLon) * mPerDegLon(refLat),
+		y: (a.lat - refLat) * M_PER_DEG_LAT,
+		z: a.altitudeMslMeters,
+		vx: a.groundspeedMps * Math.sin(trackRad),
+		vy: a.groundspeedMps * Math.cos(trackRad),
+		vz: a.verticalRateMps,
+	};
 }
 
 /**
- * Pairs inside the proximity radius but outside the conflict radius. A pair
- * already counted as a conflict is intentionally excluded so the two states
- * don't double-render the same aircraft.
+ * Predicted closest approach between two aircraft over [0, horizon], assuming
+ * constant velocity. Returns the minimum slant range, the time it occurs, and
+ * the current slant range.
  */
-export function detectWarnings(aircraft: readonly Aircraft[]): WarningPair[] {
-	const out: WarningPair[] = [];
+function closestApproach(
+	a: Kinematic,
+	b: Kinematic,
+	horizonSeconds: number,
+): { cpaSlantMeters: number; secondsToCpa: number; slantNow: number } {
+	const drx = b.x - a.x;
+	const dry = b.y - a.y;
+	const drz = b.z - a.z;
+	const dvx = b.vx - a.vx;
+	const dvy = b.vy - a.vy;
+	const dvz = b.vz - a.vz;
+	const slantNow = Math.hypot(drx, dry, drz);
+	const dvSq = dvx * dvx + dvy * dvy + dvz * dvz;
+	let t = 0;
+	if (dvSq > 1e-6) {
+		t = -(drx * dvx + dry * dvy + drz * dvz) / dvSq;
+		t = Math.max(0, Math.min(horizonSeconds, t));
+	}
+	const cx = drx + dvx * t;
+	const cy = dry + dvy * t;
+	const cz = drz + dvz * t;
+	return { cpaSlantMeters: Math.hypot(cx, cy, cz), secondsToCpa: t, slantNow };
+}
+
+// -----------------------------------------------------------------------------
+//  Detector
+// -----------------------------------------------------------------------------
+
+export function detectConflicts(
+	aircraft: readonly Aircraft[],
+	fta: FireTrafficArea,
+): Conflict[] {
+	const out: Conflict[] = [];
+	const tol = DECONFLICTION.blockBustToleranceMeters;
+
+	// --- Per-aircraft checks: block-bust, column-incursion, intruder. ---
+	for (const a of aircraft) {
+		// Block-bust — AGL outside the assigned stack block.
+		const block = a.assignedBlock;
+		if (a.aglMeters < block.floorAglMeters - tol) {
+			out.push({
+				kind: 'block-bust',
+				severity: 'caution',
+				id: a.id,
+				callsign: a.callsign,
+				edge: 'floor',
+				exceedanceMeters: a.aglMeters - block.floorAglMeters,
+			});
+		} else if (a.aglMeters > block.ceilAglMeters + tol) {
+			out.push({
+				kind: 'block-bust',
+				severity: 'caution',
+				id: a.id,
+				callsign: a.callsign,
+				edge: 'ceiling',
+				exceedanceMeters: a.aglMeters - block.ceilAglMeters,
+			});
+		}
+
+		// Column incursion — inside the convective-column no-fly cylinder.
+		for (const zone of fta.zones) {
+			if (zone.kind !== 'convective-column') continue;
+			if (isInsideZone(a.lat, a.lon, a.aglMeters, zone)) {
+				out.push({
+					kind: 'column-incursion',
+					severity: 'critical',
+					id: a.id,
+					callsign: a.callsign,
+					zoneId: zone.id,
+				});
+			}
+		}
+
+		// Intruder — a non-participant aircraft inside the TFR.
+		if (!a.participant && isInsideTfrCylinder(a.lat, a.lon, a.altitudeMslMeters, fta)) {
+			out.push({
+				kind: 'intruder',
+				severity: 'caution',
+				id: a.id,
+				callsign: a.callsign,
+			});
+		}
+	}
+
+	// --- Pairwise check: stack-proximity via predicted closest approach. ---
+	const horizon = DECONFLICTION.cpaHorizonSeconds;
 	for (let i = 0; i < aircraft.length; i++) {
 		const a = aircraft[i];
+		const ka = kinematicOf(a, fta.centerLat, fta.centerLon);
 		for (let j = i + 1; j < aircraft.length; j++) {
 			const b = aircraft[j];
-			const vert = Math.abs(a.altitudeMslMeters - b.altitudeMslMeters);
-			if (vert >= PROXIMITY.verticalMeters) continue;
-			const lat = haversineMeters(a.lat, a.lon, b.lat, b.lon);
-			if (lat >= PROXIMITY.lateralMeters) continue;
-			// Skip pairs already in conflict.
-			if (lat < SEPARATION.lateralMeters && vert < SEPARATION.verticalMeters) continue;
+			// Sanctioned: aircraft sequenced into the same operation are
+			// expected to be close — the lead deconflicts them. Do not flag.
+			if (a.operationId && a.operationId === b.operationId) continue;
+			const kb = kinematicOf(b, fta.centerLat, fta.centerLon);
+			const cpa = closestApproach(ka, kb, horizon);
+			// React to whichever is worse: the situation now, or the predicted
+			// closest approach.
+			const reach = Math.min(cpa.cpaSlantMeters, cpa.slantNow);
+			if (reach >= DECONFLICTION.cautionSlantMeters) continue;
+			const severity: Severity =
+				reach < DECONFLICTION.criticalSlantMeters ? 'critical' : 'caution';
 			out.push({
+				kind: 'stack-proximity',
+				severity,
 				aId: a.id,
 				bId: b.id,
 				aCallsign: a.callsign,
 				bCallsign: b.callsign,
-				lateralMeters: lat,
-				verticalMeters: vert,
+				slantMetersNow: cpa.slantNow,
+				cpaSlantMeters: cpa.cpaSlantMeters,
+				secondsToCpa: cpa.secondsToCpa,
 			});
+		}
+	}
+
+	// Sort: most severe first, then soonest CPA.
+	out.sort((x, y) => {
+		const s = SEVERITY_RANK[x.severity] - SEVERITY_RANK[y.severity];
+		if (s !== 0) return s;
+		const xt = x.kind === 'stack-proximity' ? x.secondsToCpa : 0;
+		const yt = y.kind === 'stack-proximity' ? y.secondsToCpa : 0;
+		return xt - yt;
+	});
+
+	return out;
+}
+
+// -----------------------------------------------------------------------------
+//  Render / UI helpers
+// -----------------------------------------------------------------------------
+
+/** Aircraft ids participating in any conflict at or above a severity. */
+export function aircraftIdsInConflicts(
+	conflicts: readonly Conflict[],
+	minSeverity: Severity = 'advisory',
+): Set<string> {
+	const maxRank = SEVERITY_RANK[minSeverity];
+	const s = new Set<string>();
+	for (const c of conflicts) {
+		if (SEVERITY_RANK[c.severity] > maxRank) continue;
+		if (c.kind === 'stack-proximity') {
+			s.add(c.aId);
+			s.add(c.bId);
+		} else {
+			s.add(c.id);
+		}
+	}
+	return s;
+}
+
+/** Endpoint id pairs for the 3D conflict lines — only stack-proximity
+ *  conflicts connect two aircraft. */
+export function conflictLinePairs(
+	conflicts: readonly Conflict[],
+): { aId: string; bId: string; severity: Severity }[] {
+	const out: { aId: string; bId: string; severity: Severity }[] = [];
+	for (const c of conflicts) {
+		if (c.kind === 'stack-proximity') {
+			out.push({ aId: c.aId, bId: c.bId, severity: c.severity });
 		}
 	}
 	return out;
 }
 
-/** O(1) lookup helper — does an aircraft id participate in any active conflict? */
-export function conflictIdsFromPairs(pairs: readonly ConflictPair[]): Set<string> {
-	const s = new Set<string>();
-	for (const p of pairs) {
-		s.add(p.aId);
-		s.add(p.bId);
+/** One-line human summary for the banner / panel. */
+export function describeConflict(c: Conflict): string {
+	switch (c.kind) {
+		case 'block-bust': {
+			const dir = c.edge === 'floor' ? 'below' : 'above';
+			const ft = Math.round(metersToFeet(Math.abs(c.exceedanceMeters)));
+			return `${c.callsign} — ${ft} ft ${dir} assigned block`;
+		}
+		case 'stack-proximity': {
+			const t = Math.round(c.secondsToCpa);
+			const when = t <= 1 ? 'now' : `in ${t}s`;
+			return `${c.aCallsign} ↔ ${c.bCallsign} — closest approach ${when}`;
+		}
+		case 'column-incursion':
+			return `${c.callsign} — inside convective column`;
+		case 'intruder':
+			return `${c.callsign} — non-participant in TFR`;
 	}
-	return s;
 }

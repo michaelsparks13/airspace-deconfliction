@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue';
+import { computed } from 'vue';
 import { useAircraftStore } from '../composables/useAircraftStore';
 import { useDeconfliction } from '../composables/useDeconfliction';
-import { useMap } from '../composables/useMap';
 import { isInsideTfr } from '../map/tfr';
 import { fmtFeet, fmtKnots, metersToFeet } from '../geo/units';
 import { AGL_BANDS } from '../config';
@@ -10,36 +9,7 @@ import type { Aircraft, AircraftCategory } from '../data/types';
 import Legend from './Legend.vue';
 
 const store = useAircraftStore();
-const { conflictIds, warningIds } = useDeconfliction();
-const mapRef = useMap();
-
-// Per-aircraft AGL recomputed at ~10 Hz off the store snapshot rather than
-// every animation frame — the panel doesn't need 60 Hz precision and
-// queryTerrainElevation isn't free.
-const aglCacheById = ref<Record<string, number | null>>({});
-let aglTicker: ReturnType<typeof setInterval> | null = null;
-
-function refreshAgl(): void {
-	const map = mapRef.value;
-	if (!map) return;
-	const fresh: Record<string, number | null> = { ...aglCacheById.value };
-	for (const a of store.aircraft.value) {
-		const ground = map.queryTerrainElevation([a.lon, a.lat]);
-		fresh[a.id] =
-			ground === null || ground === undefined ? aglCacheById.value[a.id] ?? null : a.altitudeMslMeters - ground;
-	}
-	aglCacheById.value = fresh;
-}
-
-onMounted(() => {
-	aglTicker = setInterval(refreshAgl, 100);
-});
-onBeforeUnmount(() => {
-	if (aglTicker) clearInterval(aglTicker);
-});
-
-// Recompute immediately when aircraft list changes (new ids appear etc).
-watchEffect(refreshAgl);
+const { conflicts, criticalIds, cautionIds } = useDeconfliction();
 
 const CATEGORY_GLYPH: Record<AircraftCategory, string> = {
 	'helo-type1': 'H',
@@ -51,15 +21,14 @@ const CATEGORY_GLYPH: Record<AircraftCategory, string> = {
 
 interface Row {
 	aircraft: Aircraft;
-	agl: number | null;
-	aglBand: 'red' | 'amber' | 'green' | 'unknown';
+	agl: number;
+	aglBand: 'red' | 'amber' | 'green';
 	insideTfr: boolean;
 	inConflict: boolean;
 	inWarning: boolean;
 }
 
-function bandFor(agl: number | null): Row['aglBand'] {
-	if (agl === null) return 'unknown';
+function bandFor(agl: number): Row['aglBand'] {
 	if (agl < AGL_BANDS.redMaxMeters) return 'red';
 	if (agl < AGL_BANDS.amberMaxMeters) return 'amber';
 	return 'green';
@@ -68,28 +37,24 @@ function bandFor(agl: number | null): Row['aglBand'] {
 const rows = computed<Row[]>(() => {
 	const list = store.aircraft.value;
 	return list.map((a) => {
-		const agl = aglCacheById.value[a.id] ?? null;
-		const inConflict = conflictIds.value.has(a.id);
+		const inConflict = criticalIds.value.has(a.id);
 		return {
 			aircraft: a,
-			agl,
-			aglBand: bandFor(agl),
+			agl: a.aglMeters,
+			aglBand: bandFor(a.aglMeters),
 			insideTfr: isInsideTfr(a.lon, a.lat),
 			inConflict,
-			inWarning: !inConflict && warningIds.value.has(a.id),
+			inWarning: !inConflict && cautionIds.value.has(a.id),
 		};
 	});
 });
 
-const conflictsCount = computed(() => {
-	const { conflicts } = useDeconfliction();
-	return conflicts.value.length;
-});
-
-const warningsCount = computed(() => {
-	const { warnings } = useDeconfliction();
-	return warnings.value.length;
-});
+const conflictsCount = computed(
+	() => conflicts.value.filter((c) => c.severity === 'critical').length,
+);
+const warningsCount = computed(
+	() => conflicts.value.filter((c) => c.severity !== 'critical').length,
+);
 
 const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
 </script>
@@ -108,7 +73,7 @@ const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
 				</div>
 				<div class="stat">
 					<div class="stat-val" :class="{ warn: warningsCount > 0 }">{{ warningsCount }}</div>
-					<div class="stat-key">proximity</div>
+					<div class="stat-key">caution</div>
 				</div>
 				<div class="stat">
 					<div class="stat-val">{{ inTfrCount }}/{{ rows.length }}</div>
@@ -148,7 +113,7 @@ const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
 					<div class="alt-msl">{{ fmtFeet(row.aircraft.altitudeMslMeters) }}</div>
 					<div class="alt-agl" :class="row.aglBand">
 						<span class="agl-dot" />
-						{{ row.agl === null ? '—' : `${Math.round(metersToFeet(row.agl)).toLocaleString()} AGL` }}
+						{{ Math.round(metersToFeet(row.agl)).toLocaleString() }} AGL
 					</div>
 				</div>
 

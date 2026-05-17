@@ -1,10 +1,12 @@
 /**
- * Single source of truth for thresholds, the demo bbox, and color palettes.
- * Every other module should import from here rather than hardcoding numbers.
+ * Single source of truth for thresholds, the demo bbox, and palettes.
+ * Every other module imports from here rather than hardcoding numbers.
  *
  * Internal math is meters and m/s. The display layer (geo/units.ts) handles
  * feet/knots conversion.
  */
+
+import type { AircraftCategory, AltitudeBlock } from './data/types';
 
 /** Fictional fire near Telluride/Silverton, San Juan Mountains. */
 export const SCENARIO_CENTER: [number, number] = [-107.80, 37.85];
@@ -17,49 +19,76 @@ export const DEMO_BBOX = {
 	latMax: 38.10,
 } as const;
 
-/** Default camera. Zoom 9 keeps the basemap legible and frames the fire
- * inside a recognizable patch of San Juan terrain. Aircraft are scaled
- * zoom-relative (see AIRCRAFT_REFERENCE_MESH_SCALE) so the silhouettes
- * stay visible as the user zooms in/out. */
+/** Default camera. Pulled out to zoom 11 so the 12 NM ICOM ring is framed. */
 export const CAMERA = {
-	zoom: 12,
+	zoom: 11,
 	pitch: 62,
 	bearing: -28,
 	maxPitch: 80,
 } as const;
 
-/** Aircraft mesh scale at REFERENCE_ZOOM. AircraftLayer scales meshes
- * by 2^(REFERENCE_ZOOM - currentZoom), so the on-screen size is roughly
- * constant from zoom 8 to zoom 14. At zoom 13 (close-in) this gives a
- * comfortable silhouette; at zoom 9 (default) the meshes auto-scale ~16x
- * larger so the fleet stays visible. Halos remain 1 nm true-scale. */
+/** Aircraft mesh scale at REFERENCE_ZOOM (see AircraftLayer). */
 export const AIRCRAFT_REFERENCE_MESH_SCALE = 9;
 export const AIRCRAFT_REFERENCE_ZOOM = 13;
 
-/** Deconfliction thresholds (FAA-ish "see and avoid" minima for portfolio purposes). */
-export const SEPARATION = {
-	lateralMeters: 1852,        // 1 nm
-	verticalMeters: 152.4,      // 500 ft
+/**
+ * Deconfliction parameters.
+ *
+ * IMPORTANT: these are NOT regulatory separation minima. Over a fire,
+ * aircraft deliberately operate inside en-route minima — the deconfliction
+ * model is structural (assigned altitude blocks) and predictive (closest
+ * approach), not a fixed separation bubble. See src/deconfliction.ts.
+ */
+export const DECONFLICTION = {
+	/** Predicted closest-approach lookahead horizon, seconds. */
+	cpaHorizonSeconds: 60,
+	/** Predicted slant range at CPA below this -> critical stack-proximity. */
+	criticalSlantMeters: 600,
+	/** Predicted slant range at CPA below this (>= critical) -> caution. */
+	cautionSlantMeters: 1500,
+	/** AGL must exceed a block edge by this much before block-bust counts
+	 *  (hysteresis — avoids flicker at the boundary). */
+	blockBustToleranceMeters: 15,
 } as const;
 
 /**
- * Proximity warning thresholds — 2x the conflict bubble. A pair inside the
- * warning radius but outside the conflict radius gets a steady amber cue so
- * the operator has a few seconds of "watch this" before the pulsing red.
+ * The FTA vertical stack — canonical altitude blocks by role, AGL meters.
+ * The scenario generator assigns each aircraft the block for its category;
+ * blocks are also rendered as labeled bands.
+ *
+ * Bands intentionally overlap slightly (rotor ceiling / tanker floor) — that
+ * overlap is exactly the region the ATGS deconflicts by hand, and the region
+ * this tool surfaces. Reference: NWCG PMS 505, Standards for Aerial Supervision.
  */
-export const PROXIMITY = {
-	lateralMeters: 3704,        // 2 nm
-	verticalMeters: 304.8,      // 1000 ft
+export const STACK: Record<AircraftCategory, AltitudeBlock> = {
+	'helo-type1':  { label: 'ROTOR',  floorAglMeters: 0,    ceilAglMeters: 152 },   // sfc–500 ft
+	'air-tanker':  { label: 'TANKER', floorAglMeters: 122,  ceilAglMeters: 762 },   // 400–2500 ft
+	'recon-fw':    { label: 'RECON',  floorAglMeters: 671,  ceilAglMeters: 914 },   // 2200–3000 ft
+	'atgs-fw':     { label: 'ATGS',   floorAglMeters: 975,  ceilAglMeters: 1463 },  // 3200–4800 ft
+	'uas-sheriff': { label: 'UAS',    floorAglMeters: 0,    ceilAglMeters: 122 },   // sfc–400 ft
 } as const;
 
-/** AGL color bands. Each upper bound is exclusive. */
+/** Fire Traffic Area geometry. The ICOM ring is the 12 NM communications
+ *  boundary all incident aircraft announce within (NWCG FTA protocol). */
+export const FTA = {
+	icomRingRadiusMeters: 12 * 1852,   // 12 NM
+} as const;
+
+/** AGL color bands for the side-panel dot. Each upper bound is exclusive. */
 export const AGL_BANDS = {
 	redMaxMeters: 152.4,        // <  500 ft -> red
-	amberMaxMeters: 457.2,      // <1500 ft -> amber, otherwise green
+	amberMaxMeters: 457.2,      // < 1500 ft -> amber, otherwise green
 } as const;
 
-/** TFR cylinder, MSL ceiling (matches real wildfire TFR convention). */
+/**
+ * TFR — modeled as a circular cylinder (14 CFR 91.137 wildfire TFRs are
+ * circular around a point with an MSL ceiling), not the fire-perimeter
+ * polygon. centerLat/Lon default to the scenario center.
+ */
 export const TFR = {
+	centerLat: SCENARIO_CENTER[1],
+	centerLon: SCENARIO_CENTER[0],
+	radiusMeters: 5 * 1852,     // 5 NM radius — typical wildfire TFR footprint
 	ceilingFt: 12000,
 	get ceilingMeters(): number {
 		return this.ceilingFt * 0.3048;
@@ -74,16 +103,8 @@ export const REPLAY = {
 	availableSpeeds: [1, 2, 4] as const,
 } as const;
 
-/**
- * Tile sources. Set useLocal=true once the offline tile pack is fetched (Slice 2).
- *
- * Labels are NOT a raster layer — population-scaled cartographic labels make
- * Montrose dominant over an operationally-relevant Silverton. Instead we render
- * a curated list of POIs as MapLibre Markers (see src/map/places.ts).
- */
+/** Tile sources. */
 export const TILES = {
-	// Always stream from CDN — AWS terrarium + CARTO are fast enough that the
-	// offline tile pack isn't worth the deploy weight or DX overhead.
 	useLocal: false,
 	remote: {
 		terrarium: 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png',

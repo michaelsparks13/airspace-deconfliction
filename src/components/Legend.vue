@@ -1,16 +1,11 @@
 <script setup lang="ts">
 // Mirrors the values in src/aircraft/visuals.ts and src/config.ts so the
 // swatches stay in sync.
-import { AGL_BANDS, PROXIMITY, SEPARATION } from '../config';
+import { AGL_BANDS } from '../config';
 import { metersToFeet } from '../geo/units';
 
 const redMaxFt = Math.round(metersToFeet(AGL_BANDS.redMaxMeters));
 const amberMaxFt = Math.round(metersToFeet(AGL_BANDS.amberMaxMeters));
-
-const separationLatNm = (SEPARATION.lateralMeters / 1852).toFixed(0);
-const separationVertFt = Math.round(metersToFeet(SEPARATION.verticalMeters));
-const proximityLatNm = (PROXIMITY.lateralMeters / 1852).toFixed(0);
-const proximityVertFt = Math.round(metersToFeet(PROXIMITY.verticalMeters));
 </script>
 
 <template>
@@ -56,12 +51,24 @@ const proximityVertFt = Math.round(metersToFeet(PROXIMITY.verticalMeters));
 				<span class="label">Fire perimeter / TFR</span>
 			</div>
 			<div class="swatches">
-				<span class="swatch swatch--ring amber"><span class="dot" /></span>
-				<span class="label">Proximity warning (&lt;&nbsp;{{ proximityLatNm }}&nbsp;nm / {{ proximityVertFt }}&nbsp;ft)</span>
+				<span class="swatch swatch--fill column" />
+				<span class="label">Convective column (no-fly)</span>
 			</div>
 			<div class="swatches">
+				<span class="swatch swatch--fill icom" />
+				<span class="label">12 NM ICOM ring</span>
+			</div>
+		</div>
+
+		<div class="row">
+			<div class="row-title">Conflicts</div>
+			<div class="swatches">
 				<span class="swatch swatch--ring conflict"><span class="dot" /></span>
-				<span class="label">Separation conflict (&lt;&nbsp;{{ separationLatNm }}&nbsp;nm / {{ separationVertFt }}&nbsp;ft)</span>
+				<span class="label">Critical — column incursion or imminent CPA</span>
+			</div>
+			<div class="swatches">
+				<span class="swatch swatch--ring amber"><span class="dot" /></span>
+				<span class="label">Caution — block-bust, intruder, or near-CPA</span>
 			</div>
 		</div>
 	</div>
@@ -133,6 +140,16 @@ const proximityVertFt = Math.round(metersToFeet(PROXIMITY.verticalMeters));
 .swatch--fill.tfr {
 	background: rgba(255, 122, 59, 0.4);
 	border: 1px solid #ff7a3b;
+}
+
+.swatch--fill.column {
+	background: rgba(255, 59, 59, 0.35);
+	border: 1px solid #ff3b3b;
+}
+
+.swatch--fill.icom {
+	background: transparent;
+	border: 1px solid #6fb8ff;
 }
 
 .cat-icon {

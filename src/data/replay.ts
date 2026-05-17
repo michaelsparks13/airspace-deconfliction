@@ -4,10 +4,11 @@
  * moment.
  *
  * Linear interpolation between snapshots. Heading uses the short-way-around
- * lerp so 350° → 10° doesn't sweep through 180°.
+ * lerp. Structural fields (assignedBlock, operationId, participant) are
+ * track-level and copied through unchanged.
  */
 
-import type { Aircraft, AircraftCategory, CrewType } from './types';
+import type { Aircraft, AircraftCategory, AltitudeBlock, CrewType } from './types';
 import scenario from './mock-san-juans-fire.json';
 
 interface Sample {
@@ -15,6 +16,7 @@ interface Sample {
 	lat: number;
 	lon: number;
 	altitudeMslMeters: number;
+	aglMeters: number;
 	trueTrackDeg: number;
 	groundspeedMps: number;
 	verticalRateMps: number;
@@ -25,6 +27,9 @@ interface Track {
 	callsign: string;
 	category: AircraftCategory;
 	crew: CrewType;
+	assignedBlock: AltitudeBlock;
+	operationId?: string;
+	participant: boolean;
 	samples: Sample[];
 }
 
@@ -55,8 +60,8 @@ function lerpHeading(a: number, b: number, k: number): number {
 
 /**
  * Find the two samples bracketing time t and the interpolation factor.
- * Samples are sorted by t. Linear scan from a per-track cursor for cheapness
- * during forward playback; falls back to a clamped lookup on seek.
+ * Linear scan from a per-track cursor for cheap forward playback; clamps on
+ * seek.
  */
 function bracket(samples: readonly Sample[], t: number, cursor: number): {
 	a: Sample;
@@ -72,9 +77,7 @@ function bracket(samples: readonly Sample[], t: number, cursor: number): {
 		return { a: samples[last], b: samples[last], k: 0, nextCursor: last };
 	}
 	let i = Math.max(0, Math.min(cursor, last - 1));
-	// Walk forward if we've moved past the current bracket.
 	while (i < last - 1 && t > samples[i + 1].t) i++;
-	// Walk backward if we've seeked backward.
 	while (i > 0 && t < samples[i].t) i--;
 	const a = samples[i];
 	const b = samples[i + 1];
@@ -107,9 +110,13 @@ export function createReplayAdapter(): ReplayAdapter {
 					lat: lerp(a.lat, b.lat, k),
 					lon: lerp(a.lon, b.lon, k),
 					altitudeMslMeters: lerp(a.altitudeMslMeters, b.altitudeMslMeters, k),
+					aglMeters: lerp(a.aglMeters, b.aglMeters, k),
 					trueTrackDeg: lerpHeading(a.trueTrackDeg, b.trueTrackDeg, k),
 					groundspeedMps: lerp(a.groundspeedMps, b.groundspeedMps, k),
 					verticalRateMps: lerp(a.verticalRateMps, b.verticalRateMps, k),
+					assignedBlock: tr.assignedBlock,
+					operationId: tr.operationId,
+					participant: tr.participant,
 				});
 			}
 			return out;
