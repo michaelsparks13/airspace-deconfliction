@@ -156,17 +156,20 @@ button:focus-visible {
 		0 0 10px rgba(255, 185, 56, 0.65);
 }
 
+/* Pulse via box-shadow only. Animating `transform` here would clobber the
+ * `translate(x, y)` MapLibre writes on the marker element each frame, and the
+ * pip would warp to the viewport's top-left corner. */
 @keyframes aircraft-pip-pulse {
 	from {
-		transform: scale(1);
 		box-shadow:
 			0 0 0 1px rgba(0, 0, 0, 0.6),
-			0 0 8px var(--conflict-glow);
+			0 0 8px var(--conflict-glow),
+			0 0 0 0 var(--conflict);
 	}
 	to {
-		transform: scale(1.25);
 		box-shadow:
 			0 0 0 1px rgba(0, 0, 0, 0.6),
-			0 0 16px var(--conflict);
+			0 0 16px var(--conflict),
+			0 0 0 4px rgba(255, 59, 59, 0.45);
 	}
 }
