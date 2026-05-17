@@ -133,11 +133,11 @@ function meshScaleForZoom(zoom: number): number {
  * separation thresholds).
  */
 const CATEGORY_MESH_BOOST: Record<AircraftCategory, number> = {
-	'air-tanker': 3.0,
-	'helo-type1': 12.0,
-	'recon-fw': 1.8,
-	'atgs-fw': 1.8,
-	'uas-sheriff': 45.0,
+	'air-tanker': 2.0,
+	'helo-type1': 4.8,
+	'recon-fw': 3.6,
+	'atgs-fw': 3.6,
+	'uas-sheriff': 9.0,
 };
 
 function disposeSlot(slot: AircraftSlot, scene: THREE.Scene): void {
