@@ -2,7 +2,6 @@
 
 A Vite + Vue 3 + three.js prototype that puts wildfire aircraft at their real MSL altitude over 3D terrain, computes AGL against a terrarium-encoded DEM, and flags airspace conflicts from the perspective of an Air Tactical Group Supervisor (ATGS) running a Fire Traffic Area.
 
-Sibling to [`etl-nws-alerts`](../etl-nws-alerts) in the `co-coe` interview portfolio.
 
 ## The pitch
 
