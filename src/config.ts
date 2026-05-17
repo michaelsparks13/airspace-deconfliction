@@ -22,7 +22,7 @@ export const DEMO_BBOX = {
  * zoom-relative (see AIRCRAFT_REFERENCE_MESH_SCALE) so the silhouettes
  * stay visible as the user zooms in/out. */
 export const CAMERA = {
-	zoom: 9,
+	zoom: 12,
 	pitch: 62,
 	bearing: -28,
 	maxPitch: 80,

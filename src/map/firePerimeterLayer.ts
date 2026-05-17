@@ -14,20 +14,26 @@ import firePerimeter from '../data/fire-perimeter.json';
 
 export const FIRE_PERIMETER = firePerimeter as GeoJSON.Feature<GeoJSON.Polygon>;
 
-function perimeterCentroid(): [number, number] {
+/** Place the label just outside the polygon's north edge so it never sits on
+ * top of the fire fill (the orange wash overlaps text halos badly). The
+ * lat offset is in degrees — ~0.005° is roughly 550 m here. */
+const LABEL_LAT_OFFSET_DEG = 0.006;
+
+function perimeterTopCenter(): [number, number] {
 	const ring = FIRE_PERIMETER.geometry.coordinates[0];
-	let sumLon = 0;
-	let sumLat = 0;
-	const points = ring.slice(0, -1); // drop closing duplicate
-	for (const [lon, lat] of points) {
-		sumLon += lon;
-		sumLat += lat;
+	let minLon = Infinity;
+	let maxLon = -Infinity;
+	let maxLat = -Infinity;
+	for (const [lon, lat] of ring) {
+		if (lon < minLon) minLon = lon;
+		if (lon > maxLon) maxLon = lon;
+		if (lat > maxLat) maxLat = lat;
 	}
-	return [sumLon / points.length, sumLat / points.length];
+	return [(minLon + maxLon) / 2, maxLat + LABEL_LAT_OFFSET_DEG];
 }
 
 function labelFeature(): GeoJSON.Feature<GeoJSON.Point> {
-	const [lon, lat] = perimeterCentroid();
+	const [lon, lat] = perimeterTopCenter();
 	const acres = FIRE_PERIMETER.properties?.acresApprox;
 	const name = FIRE_PERIMETER.properties?.name ?? 'Fire perimeter';
 	const subtitle = acres ? `${acres.toLocaleString()} ac · TFR active` : 'TFR active';
@@ -92,7 +98,7 @@ export function addFirePerimeterLayers(map: MapLibreMap): void {
 				],
 				'text-size': 13,
 				'text-letter-spacing': 0.08,
-				'text-anchor': 'center',
+				'text-anchor': 'bottom',
 				'text-allow-overlap': true,
 				'text-ignore-placement': true,
 			},
