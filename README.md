@@ -6,9 +6,7 @@ Sibling to [`etl-nws-alerts`](../etl-nws-alerts) in the `co-coe` interview portf
 
 ## The pitch
 
-Current TAK-family tools render aircraft as flat icons on a 2D map, even when you're stacking a Type 1 helicopter at 300 ft AGL, a tanker on a retardant run at 150 ft, and a fixed-wing recon at 2,500 ft over the same drainage. Operators read an altitude column and form the picture in their head.
-
-This prototype shows what the 3D version could look like: aircraft positioned at true altitude over real terrain, a TFR rendered as an extruded cylinder, operational zones (drop zone, convective column, dip site) as translucent volumes, and conflicts surfaced from a fireground deconfliction model rather than en-route separation minima.
+This prototype shows what a 3D version of a TAK airspace deconfliction tool could look like: aircraft positioned at true altitude over real terrain, a TFR rendered as an extruded cylinder, operational zones (drop zone, convective column, dip site) as translucent volumes, and conflicts surfaced from a fireground deconfliction model rather than en-route separation minima.
 
 Replay is a fictional 90-second scenario engineered to fire the conflict UI; live mode was tried against OpenSky but pulled out (a wilderness bbox returns zero aircraft most of the time, which didn't add demo value).
 
@@ -63,17 +61,6 @@ This is a prototype. Out of scope:
 
 ## What production would need
 
-If this graduated past portfolio:
-
-1. Bidirectional CoT so the same picture mirrors into ATAK/WinTAK on the ground.
-2. Persistent track storage with on-disk retention; replay over arbitrary windows.
-3. Hardware-clock-synced timeline. Multi-source data (ADS-B + ATC + dispatch + on-aircraft GPS) doesn't tick at one frequency; the current code assumes wall-clock-synchronized samples.
-4. FAA NOTAM API ingestion for real TFR shapes, not a hand-edited GeoJSON.
-5. Terrain-following TFR ceiling. Wildfire restrictions are often stated AGL, which means the top contour follows terrain.
-6. Per-aircraft conflict acknowledgment so a dispatcher acks each one.
-7. Auth: certificate-pinned API client, TAK Server registration for live ingest.
-8. Spatial indexing. Pairwise O(n²) is fine at 5 aircraft; at 500 you want a uniform grid or k-d tree.
-
 ## How to run
 
 Requirements: Node 24+, npm 10+.
@@ -97,15 +84,3 @@ npm run preview             # serve dist/
 
 Live: <https://airspace-deconfliction.vercel.app>
 
-Configs in the repo: `netlify.toml`, `vercel.json`. Both ship `dist/` plus the bundled tile pack from `public/tiles/`.
-
-## Things to ask about
-
-- The matrix math for placing aircraft at MSL over moving 3D terrain. `MercatorCoordinate.fromLngLat([lng,lat], alt_m)` gives the scene origin in Mercator units; `meterInMercatorCoordinateUnits()` gives meters→Mercator scale; compose `mapProj × translate(origin) × scale(s,-s,s)` and you can place meshes in real meters relative to that origin. The Y-negation plus a scene pre-rotation lands scene-local axes at (east, up, north). See `src/aircraft/AircraftLayer.ts` around line 155 and 345.
-- Handling `null` from `queryTerrainElevation`. It returns null before terrain tiles for that lng/lat have loaded. Per-aircraft `lastAgl` cache, fall back to the cached value, hide the ground stem if there's never been a valid AGL. Without this the halo color flickers grey-then-correct on every pan/zoom.
-- Why I compute AGL from `MSL − terrain` instead of trusting the aircraft's reported value. ADS-B reports baro_altitude (pressure altitude, MSL-ish), not AGL. Radar altimeters don't surface in standard tracking feeds. AGL is implicitly a relationship between the aircraft and the geometry under it, so computing it locally against the DEM keeps the visualization and the deconfliction layer on the same source of truth.
-- Failure mode at 500 aircraft. The pairwise loop is fine (~125k checks/snapshot). What actually breaks first is `queryTerrainElevation` cost in `AircraftLayer.render`: that's a per-aircraft tile lookup at 60 Hz. Throttle to ~5 Hz (same throttle the SidePanel uses for AGL display) and interpolate.
-
----
-
-*Portfolio piece. Any resemblance to real Colorado incidents, callsigns, or operational deployments is coincidental.*
