@@ -95,10 +95,9 @@ npm run preview             # serve dist/
 
 ## Deploy
 
-Configs in the repo: `netlify.toml`, `vercel.json`. Both ship `dist/` plus the bundled tile pack from `public/tiles/`.
+Live: <https://airspace-deconfliction.vercel.app>
 
-- Netlify: _(link to be added)_
-- Vercel: _(link to be added)_
+Configs in the repo: `netlify.toml`, `vercel.json`. Both ship `dist/` plus the bundled tile pack from `public/tiles/`.
 
 ## Things to ask about
 
