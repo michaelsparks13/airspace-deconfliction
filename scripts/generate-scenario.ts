@@ -1,24 +1,22 @@
-/**
- * Generates src/data/mock-san-juans-fire.json — the 90s replay scenario.
- *
- * Five aircraft, each track defined as a function of time t in seconds.
- * Tracks are sampled at 1 Hz; AGL keyframes are converted to MSL against the
- * local terrarium DEM, and BOTH aglMeters and altitudeMslMeters are emitted
- * so the runtime deconfliction layer needs no terrain sampler.
- *
- * Each track is also tagged with its ATGS-assigned stack block (from
- * config.STACK), its participant flag, and an optional operationId.
- *
- * Engineered events (after this rewrite):
- *   - Eagle 1 (sheriff UAS) is a NON-PARTICIPANT inside the TFR -> persistent
- *     intruder alert for the whole run.
- *   - Tanker 21 descends below its assigned TANKER block onto the retardant
- *     run (~T+18..T+46) -> block-bust.
- *   - Tanker 21 and 5H converge near the fire's NE edge at T+42..T+50 ->
- *     stack-proximity (critical), surfaced early by CPA lookahead.
- *
- *   npm run generate-scenario
- */
+// Generates src/data/mock-san-juans-fire.json: 90-second replay, five
+// aircraft, each track defined as a function of t.
+//
+// Sampled at 1 Hz. AGL keyframes are converted to MSL against the local
+// terrarium DEM so both aglMeters and altitudeMslMeters land in the JSON,
+// keeping the runtime deconfliction layer terrain-sampler-free.
+//
+// Each track is tagged with its ATGS-assigned stack block (config.STACK),
+// participant flag, and an optional operationId.
+//
+// Engineered events:
+//   - Eagle 1 (sheriff UAS) is a NON-PARTICIPANT inside the TFR, giving a
+//     persistent intruder alert for the whole run.
+//   - Tanker 21 descends below its TANKER block on the retardant run
+//     (~T+18..T+46): block-bust.
+//   - Tanker 21 and 5H converge near the fire's NE edge at T+42..T+50,
+//     fires stack-proximity (critical) early via CPA lookahead.
+//
+// Run: npm run generate-scenario
 
 import { writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
@@ -35,9 +33,7 @@ const DURATION_SECONDS = 90;
 const HZ = 1;
 const DEM_ZOOM = 10;
 
-// -----------------------------------------------------------------------------
-//  Terrarium DEM sampler
-// -----------------------------------------------------------------------------
+// --- Terrarium DEM sampler ---
 
 interface DecodedTile {
 	width: number;
@@ -80,7 +76,7 @@ function terrariumElevation(tile: DecodedTile, px: number, py: number): number {
 	return r * 256 + g + b / 256 - 32768;
 }
 
-/** Bilinear-interpolated terrain MSL elevation in meters at (lat, lon). */
+/** Bilinear-interpolated terrain MSL (meters) at (lat, lon). */
 function sampleTerrainMsl(lat: number, lon: number): number {
 	const tx = lon2tile(lon, DEM_ZOOM);
 	const ty = lat2tile(lat, DEM_ZOOM);
@@ -113,9 +109,7 @@ function sampleTerrainMsl(lat: number, lon: number): number {
 	);
 }
 
-// -----------------------------------------------------------------------------
-//  Track-builder helpers
-// -----------------------------------------------------------------------------
+// --- Track-builder helpers ---
 
 interface Keyframe {
 	t: number;
@@ -168,7 +162,7 @@ function sampleTrack(keys: Keyframe[], t: number): Omit<Keyframe, 't'> {
 	throw new Error(`unreachable: t=${t}`);
 }
 
-/** Orbit pattern keyframes at constant AGL around a center. */
+/** Orbit pattern: constant AGL around a center. */
 function orbitKeyframes(opts: {
 	centerLat: number;
 	centerLon: number;
@@ -207,14 +201,11 @@ function orbitKeyframes(opts: {
 	return out;
 }
 
-// -----------------------------------------------------------------------------
-//  Track definitions
-// -----------------------------------------------------------------------------
+// --- Track definitions ---
 
-/**
- * Type 1 helicopter — bucket drop cycle. Stays in the ROTOR block (sfc–500 ft
- * AGL) throughout; descends toward the dip site during the conflict window.
- */
+// Type 1 helicopter on a bucket-drop cycle. Stays in the ROTOR block
+// (surface–500 ft AGL); descends toward the dip site during the conflict
+// window.
 const HELO_KEYS: Keyframe[] = [
 	{ t: 0,  lat: 37.8410, lon: -107.8260, aglMeters: 60, headingDeg: 50,  gsMps: 36, vrateMps: 0 },
 	{ t: 20, lat: 37.8520, lon: -107.8040, aglMeters: 70, headingDeg: 55,  gsMps: 36, vrateMps: 0.5 },
@@ -226,11 +217,9 @@ const HELO_KEYS: Keyframe[] = [
 	{ t: 90, lat: 37.8500, lon: -107.7620, aglMeters: 5,  headingDeg: 180, gsMps: 0,  vrateMps: 0 },
 ];
 
-/**
- * Air tanker — retardant run + climb-out. Descends to ~80 m AGL on the run,
- * which is below the TANKER block floor (122 m) -> a block-bust during the
- * run; converges with 5H near the fire edge at T+42..T+50.
- */
+// Air tanker on a retardant run + climb-out. Descends to ~80 m AGL on the
+// run, below the TANKER block floor (122 m) for the block-bust event;
+// converges with 5H near the fire edge at T+42..T+50.
 const TANKER_KEYS: Keyframe[] = [
 	{ t: 0,  lat: 37.7900, lon: -107.8100, aglMeters: 250, headingDeg: 5,   gsMps: 75, vrateMps: 0 },
 	{ t: 20, lat: 37.8350, lon: -107.8050, aglMeters: 110, headingDeg: 0,   gsMps: 78, vrateMps: -1 },
@@ -241,7 +230,7 @@ const TANKER_KEYS: Keyframe[] = [
 	{ t: 90, lat: 37.8670, lon: -107.6900, aglMeters: 740, headingDeg: 90,  gsMps: 82, vrateMps: 4 },
 ];
 
-/** Recon fixed-wing — left orbit NE of fire, in the RECON block. */
+/** Recon fixed-wing: left orbit NE of fire, in the RECON block. */
 const RECON_KEYS = orbitKeyframes({
 	centerLat: 37.8950,
 	centerLon: -107.7400,
@@ -252,7 +241,7 @@ const RECON_KEYS = orbitKeyframes({
 	startPhase: 0,
 });
 
-/** ATGS air-attack — higher, wider orbit south of fire, in the ATGS block. */
+/** ATGS air-attack: higher, wider orbit south of fire, in the ATGS block. */
 const ATGS_KEYS = orbitKeyframes({
 	centerLat: 37.8150,
 	centerLon: -107.8250,
@@ -263,16 +252,14 @@ const ATGS_KEYS = orbitKeyframes({
 	startPhase: Math.PI / 2,
 });
 
-/** Sheriff UAS — holding ~400 ft AGL over a structure-protection corner.
- *  Modeled as a NON-PARTICIPANT: not checked in to the FTA. */
+// Sheriff UAS holding ~400 ft AGL over a structure-protection corner.
+// Non-participant: not checked in to the FTA.
 const UAS_KEYS: Keyframe[] = [
 	{ t: 0,  lat: 37.8420, lon: -107.8150, aglMeters: 120, headingDeg: 180, gsMps: 6, vrateMps: 0 },
 	{ t: 90, lat: 37.8380, lon: -107.8150, aglMeters: 120, headingDeg: 180, gsMps: 6, vrateMps: 0 },
 ];
 
-// -----------------------------------------------------------------------------
-//  Track manifest
-// -----------------------------------------------------------------------------
+// --- Track manifest ---
 
 interface TrackManifest {
 	id: string;
@@ -292,9 +279,7 @@ const TRACKS: TrackManifest[] = [
 	{ id: 'uas-sheriff-1',   callsign: 'Eagle 1',       category: 'uas-sheriff', crew: 'uas',    participant: false, keys: UAS_KEYS },
 ];
 
-// -----------------------------------------------------------------------------
-//  Sample + emit
-// -----------------------------------------------------------------------------
+// --- Sample + emit ---
 
 interface Sample {
 	t: number;
@@ -368,10 +353,10 @@ const file: ReplayFile = {
 	hz: HZ,
 	notes:
 		'Generated by scripts/generate-scenario.ts. Each sample carries both ' +
-		'aglMeters and altitudeMslMeters (terrain-aware, zoom-10 terrarium DEM). ' +
-		'Tracks are tagged with ATGS-assigned stack blocks. Engineered events: ' +
-		'Eagle 1 is a non-participant intruder in the TFR; Tanker 21 block-busts ' +
-		'on its retardant run and converges with 5H at T+42..T+50.',
+		'aglMeters and altitudeMslMeters, baked against the zoom-10 terrarium ' +
+		'DEM. Tracks are tagged with ATGS-assigned stack blocks. Engineered ' +
+		'events: Eagle 1 is a non-participant intruder in the TFR; Tanker 21 ' +
+		'block-busts on its retardant run and converges with 5H at T+42..T+50.',
 	tracks: sampled.map(({ tr, sr }) => ({
 		id: tr.id,
 		callsign: tr.callsign,
@@ -392,7 +377,7 @@ const overallMinAgl = Math.min(...sampled.map((s) => s.sr.minAgl));
 const overallMaxAgl = Math.max(...sampled.map((s) => s.sr.maxAgl));
 console.log(
 	`${file.tracks.length} tracks × ${file.tracks[0].samples.length} samples = ${totalSamples} records ` +
-		`— min AGL = ${overallMinAgl.toFixed(1)} m, max AGL = ${overallMaxAgl.toFixed(1)} m`,
+		`(min AGL ${overallMinAgl.toFixed(1)} m, max AGL ${overallMaxAgl.toFixed(1)} m)`,
 );
 
 if (overallMinAgl < -10) {

@@ -1,12 +1,4 @@
-/**
- * Great-circle (haversine) distance between two lat/lon points, in METERS.
- *
- * Pure function — no allocations, no dependencies. Re-used by the
- * deconfliction layer's pairwise loop and by the conflict-banner UI.
- *
- * Mean Earth radius (WGS84-ish): 6,371,008.8 m.
- */
-
+// Great-circle distance in meters. Mean Earth radius (WGS84-ish).
 const EARTH_RADIUS_M = 6_371_008.8;
 
 function toRad(deg: number): number {

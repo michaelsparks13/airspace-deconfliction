@@ -1,10 +1,6 @@
-/**
- * Screen-space aircraft "pip" markers — small DOM dots overlaid by MapLibre's
- * Marker system so each aircraft has a constant-pixel anchor that never
- * disappears at any zoom level. Complements the three.js halo + outline + mesh
- * in AircraftLayer.ts (which are real-world scale and can vanish at high
- * zoom-out or close-in views).
- */
+// Screen-space pip markers: constant-pixel DOM dots via maplibregl.Marker.
+// Complements the three.js halo / outline / mesh in AircraftLayer (which are
+// in real meters and can vanish at extreme zooms).
 
 import maplibregl, { type Map as MapLibreMap, type Marker } from 'maplibre-gl';
 import type { Aircraft } from '../data/types';

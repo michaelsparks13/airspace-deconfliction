@@ -1,7 +1,5 @@
-/**
- * Reactive wrapper around detectConflicts(). Recomputes on every fleet
- * snapshot change, against the scenario's Fire Traffic Area.
- */
+// Reactive wrapper around detectConflicts(): recomputes on each fleet
+// snapshot against the scenario FTA.
 
 import { computed } from 'vue';
 import {
@@ -20,11 +18,11 @@ function build() {
 	const conflicts = computed<Conflict[]>(() =>
 		detectConflicts(store.aircraft.value, SCENARIO_FTA),
 	);
-	/** ids in a critical conflict — render as a pulsing red cue. */
+	/** ids in a critical conflict, rendered as a pulsing red cue. */
 	const criticalIds = computed(() =>
 		aircraftIdsInConflicts(conflicts.value, 'critical'),
 	);
-	/** ids in a caution/advisory conflict but NOT critical — steady amber. */
+	/** ids in a caution/advisory conflict but NOT critical: steady amber. */
 	const cautionIds = computed(() => {
 		const crit = criticalIds.value;
 		const out = new Set<string>();

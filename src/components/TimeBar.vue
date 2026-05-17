@@ -64,7 +64,7 @@ const scrubPosition = computed(() => Math.round(replay.progress.value * 1000));
 .time-bar {
 	position: absolute;
 	left: 16px;
-	right: 360px;       /* leave room for the right-rail panel that slice 9 lands */
+	right: 360px;       /* leave room for the side panel */
 	bottom: 16px;
 	height: 56px;
 	padding: 0 14px;

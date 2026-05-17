@@ -1,14 +1,12 @@
-/**
- * Hand-curated point-of-interest labels for the San Juans demo bbox.
- *
- * Tactical/operational maps universally use curated POI lists rather than the
- * population-scaled labels in stock raster basemaps — for a fire near Silverton
- * we want SILVERTON prominent, not "Montrose" (the largest nearby city) winning
- * the typographic real estate just because it has more residents.
- *
- * Towns: candidates for helibase / ICP / dispatch reference.
- * Peaks: recognizable landmarks for an interviewer to orient themselves.
- */
+// Hand-curated POI labels.
+//
+// Stock raster basemaps scale labels by population: for a fire near
+// Silverton, Montrose (the largest nearby town) wins all the typographic
+// real estate even though Silverton is the relevant landmark. Curated lists
+// are how tactical and operational maps usually solve this.
+//
+// Towns: candidates for helibase / ICP / dispatch reference.
+// Peaks: landmarks an interviewer can orient on.
 
 import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl';
 
@@ -48,8 +46,6 @@ export function addPlaceLabels(map: MapLibreMap): void {
 		new maplibregl.Marker({
 			element: buildPlaceElement(place),
 			anchor: 'left',
-			// Anchor on terrain so the label sits on the actual ground surface
-			// once terrain tiles load — without this it floats at sea level.
 		})
 			.setLngLat(place.lonLat)
 			.addTo(map);

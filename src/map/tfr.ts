@@ -1,23 +1,16 @@
-/**
- * Temporary Flight Restriction (TFR) volume.
- *
- *  - In 3D: a translucent vertical prism extruded from sea level up to
- *    TFR.ceilingFt MSL, sharing the AircraftLayer's matrix conventions
- *    (scene-local meters, y=up, scene origin at scenario center).
- *    Implemented as a MapLibre CustomLayer that renders its own three.js
- *    scene; could be merged into AircraftLayer's scene for one fewer GL
- *    state switch, but keeping it separate makes the code easier to reason
- *    about and keeps the TFR independently toggleable later.
- *
- *  - In 2D logic: isInsideTfr(lng, lat) — ray-cast point-in-polygon over
- *    the same coordinates the 3D mesh is built from. Used by the side
- *    panel (slice 9) to label each aircraft IN/OUT.
- *
- * Simplifying assumption (called out in README): TFR footprint == fire
- * perimeter polygon. Real wildfire TFRs are typically circular around a
- * point with buffer mileage; substitute that here without changing the
- * rendering path if we want.
- */
+// TFR volume.
+//
+// In 3D: a translucent vertical prism extruded from sea level up to the
+// MSL ceiling, sharing the AircraftLayer matrix conventions. Its own
+// CustomLayer / three.js scene; could be merged into AircraftLayer's
+// scene for one fewer GL state switch, but separating it keeps the TFR
+// independently toggleable.
+//
+// In 2D: isInsideTfr(lng, lat), ray-cast point-in-polygon over the same
+// coordinates the mesh is built from. Used by the side panel for IN/OUT.
+//
+// Simplification (called out in README): footprint == fire-perimeter
+// polygon. Real wildfire TFRs are typically circular with buffer mileage.
 
 import * as THREE from 'three';
 import maplibregl, {
@@ -42,8 +35,8 @@ function metersPerDegLon(lat: number): number {
 /** Outer ring of the TFR footprint, lng/lat. */
 function tfrRingLngLat(): readonly [number, number][] {
 	const ring = FIRE_PERIMETER.geometry.coordinates[0] as [number, number][];
-	// Polygon rings are closed (first == last); drop the duplicate for our
-	// extrude shape since THREE.Shape closes implicitly.
+	// GeoJSON rings close themselves (first == last); THREE.Shape doesn't
+	// want the duplicate, so drop it.
 	const last = ring.length - 1;
 	const closed =
 		ring[0][0] === ring[last][0] && ring[0][1] === ring[last][1];
@@ -60,10 +53,8 @@ function ringInSceneMeters(): { x: number; y: number }[] {
 	}));
 }
 
-/**
- * Point-in-polygon via ray casting on the lng/lat ring. Cheap and good
- * enough at the scale of one fire's polygon.
- */
+// Ray-casting point-in-polygon on the lng/lat ring. Cheap, plenty good at
+// the scale of one fire's polygon.
 export function isInsideTfr(lng: number, lat: number): boolean {
 	const ring = tfrRingLngLat();
 	let inside = false;
@@ -94,10 +85,9 @@ function buildTfrMesh(): THREE.Mesh {
 		bevelEnabled: false,
 		curveSegments: 1,
 	});
-	// ExtrudeGeometry extrudes along +Z by default. We want the extrusion to
-	// go UP in scene-local +Y. The Shape lives in (x, y) of its local frame
-	// where y == north in our convention; after extrude, +Z is "up" of the
-	// shape's plane. Rotate so that the shape's Z becomes the scene's Y.
+	// ExtrudeGeometry extrudes along +Z by default. The Shape lives in
+	// (x, y) where y = north here, so post-extrude +Z is "up of the shape".
+	// Rotate so that becomes scene +Y.
 	geometry.rotateX(-Math.PI / 2);
 
 	const material = new THREE.MeshBasicMaterial({
@@ -110,9 +100,8 @@ function buildTfrMesh(): THREE.Mesh {
 
 	const mesh = new THREE.Mesh(geometry, material);
 
-	// Add a brighter outline as a separate object so the boundary at the
-	// ceiling is legible — extrude geometry alone is too washed-out at
-	// low opacity to read against terrain.
+	// Brighter outline on top so the ceiling reads; the translucent extrude
+	// alone washes out against terrain.
 	const topRingPoints = ringMeters.map(
 		(p) => new THREE.Vector3(p.x, ceilingMeters, p.y),
 	);

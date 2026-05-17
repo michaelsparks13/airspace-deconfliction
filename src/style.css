@@ -1,4 +1,4 @@
-/* Dark tactical base — full-bleed map, hand-rolled CSS, no UI lib. */
+/* Dark tactical base. Full-bleed map, hand-rolled CSS, no UI lib. */
 
 :root {
 	color-scheme: dark;
@@ -79,8 +79,8 @@ button:focus-visible {
 	color: var(--text-dim) !important;
 }
 
-/* Custom curated place labels — see src/map/places.ts. Towns prominent + uppercase,
-   peaks small + italic. Sized for operational legibility, not cartographic balance. */
+/* Curated place labels (src/map/places.ts). Towns uppercase + prominent,
+   peaks small + italic. Sized for operational legibility. */
 .place-label {
 	display: flex;
 	align-items: center;
@@ -132,8 +132,8 @@ button:focus-visible {
 	font-weight: 400;
 }
 
-/* Screen-space aircraft pips. Always-visible white-outlined dots that survive
-   every zoom level — see src/aircraft/AircraftPips.ts. */
+/* Screen-space aircraft pips (src/aircraft/AircraftPips.ts): always-visible
+   white-outlined dots that survive every zoom level. */
 .aircraft-pip {
 	width: 14px;
 	height: 14px;

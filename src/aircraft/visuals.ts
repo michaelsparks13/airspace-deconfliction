@@ -1,11 +1,6 @@
-/**
- * Per-aircraft visual annotations: AGL halo ring (sits at the aircraft's
- * altitude, colored by AGL band) and ground stem (a thin vertical line from
- * the aircraft down to the ground; solid for manned, dashed for UAS).
- *
- * Building the geometries here keeps AircraftLayer focused on placement and
- * matrix math.
- */
+// AGL halo ring (sits at aircraft altitude, colored by AGL band) and ground
+// stem (vertical line down to terrain; solid for manned, dashed for UAS).
+// Keeping the geometry here so AircraftLayer can focus on placement.
 
 import * as THREE from 'three';
 import { AGL_BANDS } from '../config';
@@ -32,11 +27,8 @@ const HALO_RADIUS_METERS = 220;
 const HALO_TUBE_METERS = 40;
 const OUTLINE_RADIUS_METERS = 70;
 
-/**
- * Soft additive glow that surrounds the aircraft at its altitude. The bigger
- * radius + additive blending makes the silhouette pop against the dark
- * basemap; the lower opacity stops it from washing out at close zoom.
- */
+// Soft additive glow. Larger radius + additive blending pops the silhouette
+// against the dark basemap; low opacity keeps it from washing out close-in.
 export function buildHaloRing(): THREE.Mesh {
 	const geom = new THREE.RingGeometry(
 		HALO_RADIUS_METERS - HALO_TUBE_METERS,
@@ -53,8 +45,7 @@ export function buildHaloRing(): THREE.Mesh {
 		depthWrite: false,
 	});
 	const ring = new THREE.Mesh(geom, mat);
-	// RingGeometry lies in the XY plane; rotate so it lies flat (XZ in our
-	// scene-local frame where Y is up).
+	// RingGeometry lies in XY; rotate it to XZ so it's flat in scene-local.
 	ring.rotation.x = -Math.PI / 2;
 	return ring;
 }
@@ -64,11 +55,8 @@ export function setHaloColor(ring: THREE.Mesh, band: AglBand): void {
 	mat.color.setHex(AGL_COLORS[band]);
 }
 
-/**
- * Crisp 1-px white outline ring sitting inside the glow. Keeps the aircraft
- * silhouette readable when the soft halo bleeds into bright terrain or the
- * fire perimeter.
- */
+// Crisp white outline inside the glow, keeps the silhouette readable when
+// the halo bleeds into bright terrain or the fire fill.
 export function buildOutlineRing(): THREE.LineLoop {
 	const points: THREE.Vector3[] = [];
 	const segments = 48;
@@ -89,13 +77,9 @@ export function buildOutlineRing(): THREE.LineLoop {
 	return ring;
 }
 
-/**
- * Ground stem: a vertical line from (x, 0, z) to (x, altitude, z).
- * Built as a Line for manned, as a series of dashes for UAS.
- *
- * We update the stem's length each frame (since AGL changes), so we expose
- * a single object whose endpoint we mutate by setting `geometry.attributes`.
- */
+// Vertical line from (x, 0, z) to (x, altitude, z): solid for manned,
+// dashed for UAS. Length is updated each frame as AGL changes by mutating
+// the second vertex of the geometry directly.
 export interface GroundStem {
 	object: THREE.Object3D;
 	setHeight(meters: number): void;

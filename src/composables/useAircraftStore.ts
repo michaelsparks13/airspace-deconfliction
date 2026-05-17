@@ -1,13 +1,7 @@
-/**
- * Single source of truth for the current aircraft fleet. Replay-only:
- * the OpenSky live integration that used to live here was a portfolio
- * stretch that didn't add demo value over a wilderness bbox, so it was
- * removed. If a live source is needed later, drop it back in behind a
- * mode ref and re-introduce the union here.
- *
- * Module-level singleton so the three.js AircraftLayer (outside the Vue
- * tree) can read the same shallowRef the panel and time bar consume.
- */
+// Module-level singleton for the current fleet so the three.js AircraftLayer
+// (outside the Vue tree) reads the same shallowRef as the side panel and
+// time bar. Replay-only: the OpenSky live integration is pulled, see git
+// history for the prior union-mode plumbing.
 
 import type { Aircraft } from '../data/types';
 import type { ShallowRef } from 'vue';

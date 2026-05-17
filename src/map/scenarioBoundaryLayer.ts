@@ -1,9 +1,6 @@
-/**
- * Draws the offline tile-pack edge as a labeled "scenario operations area"
- * rectangle so the abrupt terrain drop-off reads as an intentional boundary
- * rather than a render bug. Without this, the cliff at the edge of DEMO_BBOX
- * looks like the map is broken.
- */
+// Label the offline tile-pack edge as a "scenario operations area" so the
+// terrain drop-off reads as intentional. Without this the cliff at the
+// DEMO_BBOX edge looks like a render bug.
 
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { DEMO_BBOX } from '../config';

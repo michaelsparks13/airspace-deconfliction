@@ -168,7 +168,7 @@ const inTfrCount = computed(() => rows.value.filter((r) => r.insideTfr).length);
 	gap: 12px;
 	padding-bottom: 10px;
 	border-bottom: 1px solid var(--border);
-	margin-top: 28px;   /* leave room for the ModeToggle floating top-right */
+	margin-top: 28px;   /* leave room for the floating top-right controls */
 }
 
 .title {

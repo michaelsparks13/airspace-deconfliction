@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// Mirrors the values in src/aircraft/visuals.ts and src/config.ts so the
-// swatches stay in sync.
+// Mirrors src/aircraft/visuals.ts + src/config.ts so swatches stay in sync.
 import { AGL_BANDS } from '../config';
 import { metersToFeet } from '../geo/units';
 
@@ -40,7 +39,7 @@ const amberMaxFt = Math.round(metersToFeet(AGL_BANDS.amberMaxMeters));
 			</div>
 			<div class="swatches">
 				<span class="cat-icon uas">Q</span>
-				<span class="label">UAS — dashed stem</span>
+				<span class="label">UAS (dashed stem)</span>
 			</div>
 		</div>
 
@@ -64,11 +63,11 @@ const amberMaxFt = Math.round(metersToFeet(AGL_BANDS.amberMaxMeters));
 			<div class="row-title">Conflicts</div>
 			<div class="swatches">
 				<span class="swatch swatch--ring conflict"><span class="dot" /></span>
-				<span class="label">Critical — column incursion or imminent CPA</span>
+				<span class="label">Critical: column incursion or imminent CPA</span>
 			</div>
 			<div class="swatches">
 				<span class="swatch swatch--ring amber"><span class="dot" /></span>
-				<span class="label">Caution — block-bust, intruder, or near-CPA</span>
+				<span class="label">Caution: block-bust, intruder, or near-CPA</span>
 			</div>
 		</div>
 	</div>

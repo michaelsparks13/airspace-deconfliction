@@ -1,18 +1,12 @@
-/**
- * One-shot tile downloader.
- *
- * Downloads terrarium DEM tiles (AWS Public Datasets) and CARTO Dark Matter
- * basemap raster tiles for the demo bbox, into public/tiles/{source}/{z}/{x}/{y}.png.
- *
- * Idempotent: skips files that already exist. Concurrency-limited (8 in flight)
- * to stay polite to CARTO's public CDN. Retries 5xx + network errors once.
- *
- * Run via:  npm run fetch-tiles
- *
- * The downloaded tiles are NOT committed to git (see .gitignore) — the script
- * is the source of truth, the tiles are derived artifacts. First-time setup
- * for a new clone is one `npm run fetch-tiles` invocation.
- */
+// One-shot tile downloader. Pulls terrarium DEM (AWS Public Datasets) and
+// CARTO Dark Matter raster tiles for the demo bbox into
+// public/tiles/{source}/{z}/{x}/{y}.png.
+//
+// Idempotent (skips existing files), concurrency 8, retries 5xx + network
+// errors once. Run via `npm run fetch-tiles`.
+//
+// Downloaded tiles aren't committed (see .gitignore); this script is the
+// source of truth, the tiles are derived.
 
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -21,8 +15,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 const ROOT = resolve(import.meta.dirname, '..');
 const OUTPUT_DIR = resolve(ROOT, 'public', 'tiles');
 
-// Mirror src/config.ts. Kept in sync manually since this script runs in Node
-// outside the Vite import graph.
+// Mirror of src/config.ts. Kept in sync manually since this runs outside
+// the Vite import graph.
 const DEMO_BBOX = {
 	lonMin: -108.10,
 	latMin: 37.60,
@@ -30,11 +24,10 @@ const DEMO_BBOX = {
 	latMax: 38.10,
 } as const;
 
-// Pitched + rotated camera reaches outside the operational bbox; download a buffer
-// in each direction so the visible-tile set always lives on disk and the camera
-// horizon shows real terrain instead of a sea-level "cliff." 0.5° at this latitude
-// is roughly 50 km of slack to the north/south and ~45 km east/west — covers any
-// reasonable pan/orbit/zoom-out within the maxBounds.
+// Pitched + rotated camera reaches past DEMO_BBOX, so we cache a buffer in
+// each direction. 0.5° here is ~50 km N/S and ~45 km E/W: covers any
+// reasonable pan/orbit/zoom-out inside maxBounds without hitting the
+// sea-level cliff at the tile-pack edge.
 const TILE_PACK_BUFFER_DEG = 0.5;
 
 const FETCH_BBOX = {
@@ -60,8 +53,6 @@ const SOURCES = [
 const USER_AGENT = 'airspace-deconfliction-portfolio/0.1 (https://github.com/) one-shot-tile-fetch';
 const CONCURRENCY = 8;
 
-// ---- Web Mercator tile math ---------------------------------------------------
-
 function lonToTileX(lon: number, z: number): number {
 	return Math.floor(((lon + 180) / 360) * 2 ** z);
 }
@@ -82,8 +73,8 @@ interface TileCoord {
 function tilesForBbox(z: number): TileCoord[] {
 	const xMin = lonToTileX(FETCH_BBOX.lonMin, z);
 	const xMax = lonToTileX(FETCH_BBOX.lonMax, z);
-	// Note: tile y axis is flipped — north has lower y. Use the max-lat corner
-	// for the min y, and vice versa.
+	// Tile Y is flipped relative to lat: north = lower y, so the max-lat
+	// corner gives y_min and vice versa.
 	const yMin = latToTileY(FETCH_BBOX.latMax, z);
 	const yMax = latToTileY(FETCH_BBOX.latMin, z);
 
@@ -95,8 +86,6 @@ function tilesForBbox(z: number): TileCoord[] {
 	}
 	return tiles;
 }
-
-// ---- Fetching -----------------------------------------------------------------
 
 async function fileExists(path: string): Promise<boolean> {
 	try {
@@ -167,8 +156,6 @@ function fmtBytes(n: number): string {
 	if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
 	return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
-
-// ---- Main ---------------------------------------------------------------------
 
 async function main(): Promise<void> {
 	const overallStart = Date.now();

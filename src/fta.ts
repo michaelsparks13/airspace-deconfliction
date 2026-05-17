@@ -1,23 +1,13 @@
-/**
- * Fire Traffic Area model for the San Juan scenario.
- *
- * The FTA is the structured airspace around an incident: a 12 NM ICOM
- * communications ring, the vertical stack of altitude blocks, and the
- * operational zones (active drop zone, convective column, helo dip site).
- * This module defines the scenario's FTA and the geometry helpers the
- * deconfliction layer needs. Pure data + pure functions — no Vue, no
- * MapLibre, no three.js.
- */
+// Fire Traffic Area for the scenario: 12 NM ICOM ring, vertical stack
+// (defined in config.ts), and the operational zones (drop zone, convective
+// column, dip site). Pure data + pure functions.
 
 import { FTA, SCENARIO_CENTER, TFR } from './config';
 import { haversineMeters } from './geo/haversine';
 
 export type ZoneKind = 'drop-zone' | 'convective-column' | 'dip-site';
 
-/**
- * A vertical cylinder of airspace: a horizontal disc plus an AGL band.
- * ceilAglMeters === null means unbounded (e.g. a convective column).
- */
+/** Vertical cylinder of airspace. ceilAglMeters === null = unbounded. */
 export interface OperationalZone {
 	id: string;
 	kind: ZoneKind;
@@ -44,12 +34,9 @@ export interface FireTrafficArea {
 
 const [CENTER_LON, CENTER_LAT] = SCENARIO_CENTER;
 
-/**
- * Scenario operational zones, placed against the fictional San Juan fire:
- * the active drop zone sits on the fire's NE edge where Tanker 21 runs
- * retardant; the convective column rises over the hot core; the dip site is
- * the drainage 5H descends to. Positions are tunables.
- */
+// Drop zone sits on the fire's NE edge where Tanker 21 runs retardant;
+// the convective column rises over the hot core; the dip site is the
+// drainage 5H descends to. Positions are tunables.
 export const SCENARIO_ZONES: readonly OperationalZone[] = [
 	{
 		id: 'dz-1',
@@ -59,7 +46,7 @@ export const SCENARIO_ZONES: readonly OperationalZone[] = [
 		centerLon: -107.7850,
 		radiusMeters: 450,
 		floorAglMeters: 0,
-		ceilAglMeters: 245,        // ~800 ft — the run + pull-up envelope
+		ceilAglMeters: 245,        // ~800 ft, run + pull-up envelope
 	},
 	{
 		id: 'col-1',
@@ -69,7 +56,7 @@ export const SCENARIO_ZONES: readonly OperationalZone[] = [
 		centerLon: -107.7950,
 		radiusMeters: 700,
 		floorAglMeters: 0,
-		ceilAglMeters: null,       // unbounded — the no-fly core
+		ceilAglMeters: null,       // unbounded no-fly core
 	},
 	{
 		id: 'dip-1',
@@ -96,7 +83,6 @@ export const SCENARIO_FTA: FireTrafficArea = {
 	zones: SCENARIO_ZONES,
 };
 
-/** Horizontal great-circle distance, meters. */
 export function horizontalMeters(
 	lat1: number,
 	lon1: number,
@@ -106,7 +92,6 @@ export function horizontalMeters(
 	return haversineMeters(lat1, lon1, lat2, lon2);
 }
 
-/** Is a point (with AGL) inside an operational-zone cylinder? */
 export function isInsideZone(
 	lat: number,
 	lon: number,
@@ -120,7 +105,6 @@ export function isInsideZone(
 	return true;
 }
 
-/** Is a point inside the TFR cylinder (within radius and below ceiling)? */
 export function isInsideTfrCylinder(
 	lat: number,
 	lon: number,

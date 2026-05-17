@@ -1,22 +1,15 @@
-/**
- * three.js CustomLayer that renders the active aircraft fleet above 3D
- * terrain at real MSL altitudes.
- *
- * Matrix math (canonical MapLibre 3D-model-on-terrain pattern):
- *
- *  - SCENE ORIGIN is the scenario center at altitude 0. Its MercatorCoordinate
- *    + meterInMercatorCoordinateUnits() give us the translate + scale that
- *    composes with MapLibre's projection matrix to map a scene-local frame
- *    in real meters (east, up, north) into clip space.
- *  - Per aircraft we maintain a THREE.Group at a position computed in
- *    east/north meters from the scene origin, with altitude as Y (up).
- *  - Heading rotates the group around its local Y axis.
- *
- *  AGL = altitudeMSL - queryTerrainElevation(lng, lat).
- *  queryTerrainElevation returns null until terrain tiles load — when null
- *  we keep the previous AGL (per-aircraft cache) so the halo color doesn't
- *  flicker grey during pan/zoom.
- */
+// three.js CustomLayer rendering the active fleet at MSL over 3D terrain.
+//
+// Matrix math (canonical MapLibre 3D-model-on-terrain pattern):
+//   - Scene origin = scenario center at altitude 0. Its MercatorCoordinate +
+//     meterInMercatorCoordinateUnits() compose with MapLibre's projection
+//     matrix to map scene-local meters (east, up, north) into clip space.
+//   - Each aircraft is a Group positioned in east/north meters from the
+//     origin, altitude as Y. Heading rotates around local Y.
+//
+// AGL = altitudeMSL - queryTerrainElevation(lng, lat). queryTerrainElevation
+// returns null until terrain tiles load, so we cache lastAgl per aircraft to
+// stop the halo flickering grey during pan/zoom.
 
 import * as THREE from 'three';
 import maplibregl, {
@@ -46,17 +39,15 @@ import {
 	type GroundStem,
 } from './visuals';
 
-/** Conflict halo override. Distinct from the AGL red so the two read differently. */
+// Conflict halo. Distinct from the AGL red so the two read differently.
 const CONFLICT_COLOR_HEX = 0xff3b3b;
 const CONFLICT_LINE_COLOR_HEX = 0xff3b3b;
-/** Halo opacity range while pulsing. */
 const CONFLICT_PULSE_MIN = 0.35;
 const CONFLICT_PULSE_MAX = 0.95;
-/** Pulse frequency in Hz. */
 const CONFLICT_PULSE_HZ = 1.4;
 
-/** Proximity-warning halo override. Steady amber — no pulse — so the operator
- * gets "watch this" without alarm fatigue. */
+// Steady amber for the warning state; no pulse, so the operator gets
+// "watch this" without alarm fatigue.
 const WARNING_COLOR_HEX = 0xffb938;
 const WARNING_HALO_OPACITY = 0.55;
 const WARNING_OUTLINE_OPACITY = 0.9;
@@ -99,9 +90,7 @@ interface LayerState {
 	originMercator: maplibregl.MercatorCoordinate;
 	metersToMerc: number;
 	map: MapLibreMap;
-	/** One segments object rebuilt each frame from current conflict pairs. */
 	conflictLines: THREE.LineSegments;
-	/** Pre-allocated position buffer; size chosen to comfortably exceed real-world pair counts. */
 	conflictLinePositions: Float32Array;
 }
 
@@ -118,13 +107,9 @@ function makeSlot(aircraft: Aircraft, scene: THREE.Scene): AircraftSlot {
 	return { root, mesh, halo, outline, stem, lastAgl: null };
 }
 
-/**
- * Mesh scale that keeps the on-screen silhouette roughly constant as the
- * user zooms in and out. 2^(refZoom - currentZoom) doubles the mesh size
- * for every zoom level out — so a value of 9 at zoom 13 becomes ~144 at
- * zoom 9 — matching how MapLibre's projection makes the same real-world
- * distance shrink on screen.
- */
+// Keep the on-screen silhouette roughly constant as the user zooms.
+// 2^(refZoom - zoom) doubles size per zoom-out level (9 at zoom 13 -> ~144 at
+// zoom 9), matching how the projection shrinks real-world distance on screen.
 function meshScaleForZoom(zoom: number): number {
 	return AIRCRAFT_REFERENCE_MESH_SCALE * Math.pow(2, AIRCRAFT_REFERENCE_ZOOM - zoom);
 }
@@ -153,11 +138,9 @@ export function createAircraftLayer(
 
 		onAdd(map, gl) {
 			const scene = new THREE.Scene();
-			// Align scene-local axes with MapLibre's Mercator frame:
-			//   scene +X = east, scene +Y = up, scene +Z = north.
-			// This is the canonical MapLibre `add-a-3d-model-on-terrain` pattern.
-			// Setting positions as (east, up, north) in scene-local and rotating
-			// meshes around their local Y then corresponds to true heading rotation.
+			// scene +X = east, +Y = up, +Z = north. With this convention,
+			// positions are (east, up, north) in meters and rotating meshes
+			// around their local Y axis is true heading rotation.
 			scene.rotateX(Math.PI / 2);
 			scene.scale.multiply(new THREE.Vector3(1, 1, -1));
 
@@ -175,9 +158,8 @@ export function createAircraftLayer(
 			});
 			renderer.autoClear = false;
 
-			// One LineSegments object whose vertex buffer is rewritten each frame
-			// from active conflict pairs. setDrawRange controls how many of the
-			// pre-allocated vertices are actually drawn.
+			// Single LineSegments rewritten per frame from active conflict pairs.
+			// setDrawRange limits draws to the live pair count.
 			const conflictLinePositions = new Float32Array(MAX_CONFLICT_PAIRS * 2 * 3);
 			const conflictGeom = new THREE.BufferGeometry();
 			conflictGeom.setAttribute(
@@ -226,7 +208,7 @@ export function createAircraftLayer(
 				if (!conflictIds.has(id)) warningIds.add(id);
 			}
 
-			// Pulse phase from wall clock so independent layers can stay in sync.
+			// Wall-clock pulse phase so independent layers stay in sync.
 			const tSec = performance.now() / 1000;
 			const pulse =
 				CONFLICT_PULSE_MIN +
@@ -234,15 +216,11 @@ export function createAircraftLayer(
 					(0.5 + 0.5 * Math.sin(2 * Math.PI * CONFLICT_PULSE_HZ * tSec));
 
 			const seen = new Set<string>();
-			// Cache east/north per id this frame to avoid recomputing for the
-			// conflict-line geometry pass below.
+			// Cache east/north for reuse by the conflict-line pass below.
 			const positions = new Map<string, { east: number; north: number; alt: number }>();
 
-			// Zoom-relative mesh scale: keep silhouettes roughly constant size on
-			// screen as the user zooms in and out.
 			const meshScale = meshScaleForZoom(state.map.getZoom());
 
-			// --- Add / update each aircraft -----------------------------------
 			for (const a of aircraft) {
 				seen.add(a.id);
 				let slot = state.slots.get(a.id);
@@ -254,14 +232,14 @@ export function createAircraftLayer(
 				const [east, north] = eastNorthMetersFromOrigin(a.lon, a.lat);
 				positions.set(a.id, { east, north, alt: a.altitudeMslMeters });
 
-				// Aircraft root sits at (east, altitude_msl, north). The mesh
-				// inside is modeled nose along +X; rotate around Y to true_track.
+				// Root at (east, alt_msl, north). Meshes are modeled nose-along
+				// +X; rotate around Y to true_track.
 				slot.root.position.set(east, a.altitudeMslMeters, north);
 				slot.mesh.rotation.y = -degToRad(a.trueTrackDeg - 90);
 				slot.mesh.scale.setScalar(meshScale);
 
-				// AGL via queryTerrainElevation. May be null before terrain
-				// tiles arrive — keep last known to avoid color flicker.
+				// queryTerrainElevation can be null before terrain tiles load;
+				// fall back to lastAgl to avoid the halo flickering grey.
 				const groundMsl = state.map.queryTerrainElevation([a.lon, a.lat]);
 				const agl =
 					groundMsl === null || groundMsl === undefined
@@ -275,14 +253,13 @@ export function createAircraftLayer(
 				const outlineMat = slot.outline.material as THREE.LineBasicMaterial;
 
 				if (inConflict) {
-					// Conflict override: pulse a distinct red, ignoring AGL band.
+					// Pulsing red overrides AGL band.
 					haloMat.color.setHex(CONFLICT_COLOR_HEX);
 					haloMat.opacity = pulse;
 					slot.stem.setColor(CONFLICT_COLOR_HEX);
 					outlineMat.color.setHex(CONFLICT_COLOR_HEX);
 					outlineMat.opacity = 0.95;
 				} else if (inWarning) {
-					// Steady amber — no pulse — so the cue reads "watch" not "alarm".
 					haloMat.color.setHex(WARNING_COLOR_HEX);
 					haloMat.opacity = WARNING_HALO_OPACITY;
 					slot.stem.setColor(WARNING_COLOR_HEX);
@@ -297,8 +274,8 @@ export function createAircraftLayer(
 					outlineMat.opacity = 0.9;
 				}
 
-				// Stem: from the GROUND (at terrain elevation) up to the
-				// aircraft. Anchored at the root's position; base is at -AGL.
+				// Stem runs from terrain elevation up to the aircraft;
+				// anchored at the root, so base is at -AGL.
 				if (agl !== null && agl !== undefined) {
 					slot.stem.object.position.y = -agl;
 					slot.stem.setHeight(agl);
@@ -308,7 +285,6 @@ export function createAircraftLayer(
 				}
 			}
 
-			// --- Remove slots that no longer have a corresponding aircraft ----
 			for (const [id, slot] of state.slots) {
 				if (!seen.has(id)) {
 					disposeSlot(slot, state.scene);
@@ -316,7 +292,7 @@ export function createAircraftLayer(
 				}
 			}
 
-			// --- Conflict lines: stack-proximity pairs only -------------------
+			// Conflict lines: stack-proximity pairs only.
 			const linePairs = conflictLinePairs(conflicts);
 			const buf = state.conflictLinePositions;
 			let pairCount = 0;
@@ -342,7 +318,6 @@ export function createAircraftLayer(
 			state.conflictLines.computeLineDistances();
 			state.conflictLines.visible = pairCount > 0;
 
-			// --- Compose the projection matrix --------------------------------
 			const mc = state.originMercator;
 			const s = state.metersToMerc;
 			const projection = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix);

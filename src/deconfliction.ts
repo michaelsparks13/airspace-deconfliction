@@ -1,30 +1,12 @@
-/**
- * Fireground deconfliction.
- *
- * This is NOT en-route conflict detection. Over a wildland fire, separation
- * is not a fixed bubble — aircraft converge on drops by design. The model
- * here is the one an Air Tactical Group Supervisor actually runs:
- *
- *   1. block-bust       — an aircraft is outside its ATGS-assigned altitude
- *                         block (the "stack"). The primary check.
- *   2. stack-proximity  — two aircraft are predicted to pass within an unsafe
- *                         slant range (closest-approach lookahead), and are
- *                         not sequenced into the same operation.
- *   3. column-incursion — an aircraft has entered the convective column,
- *                         the no-fly core over the fire.
- *   4. intruder         — a non-participant aircraft is inside the TFR.
- *
- * Pure: input is a fleet snapshot + the FTA; output is a list of typed,
- * severity-ranked conflicts. No Vue, no MapLibre, no three.js.
- *
- * Vertical reasoning uses two frames deliberately:
- *   - block / zone checks use AGL (the stack is defined above ground), and
- *   - stack-proximity uses true MSL slant range (collision risk is geometric).
- * Both are consistent because the scenario bakes AGL and MSL from one DEM.
- *
- * Complexity O(n^2) for the pairwise pass — fine for a fireground fleet.
- * Spatial bucketing is the obvious next step at production scale.
- */
+// Fireground deconfliction. NOT en-route CD&R: aircraft over a fire converge
+// on drops by design, so the model is structural (block-bust, column, intruder)
+// and predictive (closest approach), not a fixed separation bubble.
+//
+// Block / zone checks use AGL (the stack is defined above ground); pairwise
+// stack-proximity uses true MSL slant range. The scenario bakes both off the
+// same DEM so they stay consistent.
+//
+// Pure: fleet snapshot + FTA in, ranked conflicts out. No Vue / MapLibre / three.
 
 import { DECONFLICTION } from './config';
 import type { Aircraft } from './data/types';
@@ -89,10 +71,6 @@ const SEVERITY_RANK: Record<Severity, number> = {
 	advisory: 2,
 };
 
-// -----------------------------------------------------------------------------
-//  Kinematics — local ENU projection + closest-approach prediction.
-// -----------------------------------------------------------------------------
-
 interface Kinematic {
 	x: number;   // east, meters from FTA center
 	y: number;   // north, meters from FTA center
@@ -120,11 +98,7 @@ function kinematicOf(a: Aircraft, refLat: number, refLon: number): Kinematic {
 	};
 }
 
-/**
- * Predicted closest approach between two aircraft over [0, horizon], assuming
- * constant velocity. Returns the minimum slant range, the time it occurs, and
- * the current slant range.
- */
+// Predicted closest approach over [0, horizon] under constant velocity.
 function closestApproach(
 	a: Kinematic,
 	b: Kinematic,
@@ -149,10 +123,6 @@ function closestApproach(
 	return { cpaSlantMeters: Math.hypot(cx, cy, cz), secondsToCpa: t, slantNow };
 }
 
-// -----------------------------------------------------------------------------
-//  Detector
-// -----------------------------------------------------------------------------
-
 export function detectConflicts(
 	aircraft: readonly Aircraft[],
 	fta: FireTrafficArea,
@@ -160,9 +130,7 @@ export function detectConflicts(
 	const out: Conflict[] = [];
 	const tol = DECONFLICTION.blockBustToleranceMeters;
 
-	// --- Per-aircraft checks: block-bust, column-incursion, intruder. ---
 	for (const a of aircraft) {
-		// Block-bust — AGL outside the assigned stack block.
 		const block = a.assignedBlock;
 		if (a.aglMeters < block.floorAglMeters - tol) {
 			out.push({
@@ -184,7 +152,6 @@ export function detectConflicts(
 			});
 		}
 
-		// Column incursion — inside the convective-column no-fly cylinder.
 		for (const zone of fta.zones) {
 			if (zone.kind !== 'convective-column') continue;
 			if (isInsideZone(a.lat, a.lon, a.aglMeters, zone)) {
@@ -198,7 +165,6 @@ export function detectConflicts(
 			}
 		}
 
-		// Intruder — a non-participant aircraft inside the TFR.
 		if (!a.participant && isInsideTfrCylinder(a.lat, a.lon, a.altitudeMslMeters, fta)) {
 			out.push({
 				kind: 'intruder',
@@ -209,20 +175,18 @@ export function detectConflicts(
 		}
 	}
 
-	// --- Pairwise check: stack-proximity via predicted closest approach. ---
 	const horizon = DECONFLICTION.cpaHorizonSeconds;
 	for (let i = 0; i < aircraft.length; i++) {
 		const a = aircraft[i];
 		const ka = kinematicOf(a, fta.centerLat, fta.centerLon);
 		for (let j = i + 1; j < aircraft.length; j++) {
 			const b = aircraft[j];
-			// Sanctioned: aircraft sequenced into the same operation are
-			// expected to be close — the lead deconflicts them. Do not flag.
+			// Aircraft sequenced into the same operation are expected to be
+			// close: the lead deconflicts them. Don't flag.
 			if (a.operationId && a.operationId === b.operationId) continue;
 			const kb = kinematicOf(b, fta.centerLat, fta.centerLon);
 			const cpa = closestApproach(ka, kb, horizon);
-			// React to whichever is worse: the situation now, or the predicted
-			// closest approach.
+			// React to whichever is worse: now, or the predicted CPA.
 			const reach = Math.min(cpa.cpaSlantMeters, cpa.slantNow);
 			if (reach >= DECONFLICTION.cautionSlantMeters) continue;
 			const severity: Severity =
@@ -253,11 +217,7 @@ export function detectConflicts(
 	return out;
 }
 
-// -----------------------------------------------------------------------------
-//  Render / UI helpers
-// -----------------------------------------------------------------------------
-
-/** Aircraft ids participating in any conflict at or above a severity. */
+/** Aircraft ids in any conflict at or above a severity. */
 export function aircraftIdsInConflicts(
 	conflicts: readonly Conflict[],
 	minSeverity: Severity = 'advisory',
@@ -276,7 +236,7 @@ export function aircraftIdsInConflicts(
 	return s;
 }
 
-/** Endpoint id pairs for the 3D conflict lines — only stack-proximity
+/** Endpoint id pairs for the 3D conflict lines. Only stack-proximity
  *  conflicts connect two aircraft. */
 export function conflictLinePairs(
 	conflicts: readonly Conflict[],
@@ -296,16 +256,16 @@ export function describeConflict(c: Conflict): string {
 		case 'block-bust': {
 			const dir = c.edge === 'floor' ? 'below' : 'above';
 			const ft = Math.round(metersToFeet(Math.abs(c.exceedanceMeters)));
-			return `${c.callsign} — ${ft} ft ${dir} assigned block`;
+			return `${c.callsign}: ${ft} ft ${dir} assigned block`;
 		}
 		case 'stack-proximity': {
 			const t = Math.round(c.secondsToCpa);
 			const when = t <= 1 ? 'now' : `in ${t}s`;
-			return `${c.aCallsign} ↔ ${c.bCallsign} — closest approach ${when}`;
+			return `${c.aCallsign} ↔ ${c.bCallsign}: closest approach ${when}`;
 		}
 		case 'column-incursion':
-			return `${c.callsign} — inside convective column`;
+			return `${c.callsign}: inside convective column`;
 		case 'intruder':
-			return `${c.callsign} — non-participant in TFR`;
+			return `${c.callsign}: non-participant in TFR`;
 	}
 }

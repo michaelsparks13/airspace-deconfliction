@@ -1,22 +1,15 @@
-/**
- * Adds the fire perimeter as MapLibre layers on the map surface:
- *  - a semi-transparent orange fill over the burned footprint
- *  - a brighter stroke along the perimeter
- *
- * The same polygon is the footprint of the TFR cylinder rendered in 3D
- * by tfr.ts, with the simplifying assumption that the TFR boundary matches
- * the perimeter exactly (real-world TFRs are typically a circle around the
- * fire and may include buffer mileage — called out in the README).
- */
+// Fire perimeter on the map surface: translucent orange fill + brighter
+// stroke. The same polygon is the footprint of the TFR cylinder in tfr.ts;
+// see README for the simplifying assumption.
 
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import firePerimeter from '../data/fire-perimeter.json';
 
 export const FIRE_PERIMETER = firePerimeter as GeoJSON.Feature<GeoJSON.Polygon>;
 
-/** Place the label just outside the polygon's north edge so it never sits on
- * top of the fire fill (the orange wash overlaps text halos badly). The
- * lat offset is in degrees — ~0.005° is roughly 550 m here. */
+// Push the label just outside the polygon's north edge so it never sits
+// on the fire fill (the orange wash chews up text halos). 0.005° is
+// roughly 550 m at this latitude.
 const LABEL_LAT_OFFSET_DEG = 0.006;
 
 function perimeterTopCenter(): [number, number] {

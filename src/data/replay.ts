@@ -1,12 +1,9 @@
-/**
- * Replay adapter: reads the bundled scenario JSON and exposes a function that,
- * given a current time in seconds, returns the interpolated Aircraft[] at that
- * moment.
- *
- * Linear interpolation between snapshots. Heading uses the short-way-around
- * lerp. Structural fields (assignedBlock, operationId, participant) are
- * track-level and copied through unchanged.
- */
+// Replay adapter. Reads the bundled scenario JSON and returns the
+// interpolated Aircraft[] for a given time t (seconds).
+//
+// Linear lerp between samples; heading uses the short-way-around lerp.
+// Track-level structural fields (assignedBlock, operationId, participant)
+// pass through unchanged.
 
 import type { Aircraft, AircraftCategory, AltitudeBlock, CrewType } from './types';
 import scenario from './mock-san-juans-fire.json';
@@ -58,11 +55,8 @@ function lerpHeading(a: number, b: number, k: number): number {
 	return h;
 }
 
-/**
- * Find the two samples bracketing time t and the interpolation factor.
- * Linear scan from a per-track cursor for cheap forward playback; clamps on
- * seek.
- */
+// Find the two samples bracketing t and the interp factor. Per-track cursor
+// makes forward playback cheap; clamps on seek.
 function bracket(samples: readonly Sample[], t: number, cursor: number): {
 	a: Sample;
 	b: Sample;

@@ -1,20 +1,16 @@
-/**
- * Procedural low-poly aircraft meshes. No external asset files — the repo
- * stays fully self-contained, and each mesh is shaped so its silhouette
- * reads cleanly from any orbit angle.
- *
- * All meshes are oriented with the NOSE along +X (heading 90°) at unit scale
- * = real-world meters. The render layer rotates them to true_track per frame.
- *
- * Real reference sizes:
- *   - Type 1 helicopter (S-64, K-MAX): ~25 m rotor span; modeled to ~16 m.
- *   - Air tanker (BAe-146 / RJ85 class):                 ~30 m length.
- *   - Recon fixed-wing (Twin Otter-ish):                 ~16 m length.
- *   - ATGS air attack (Beechcraft King Air-ish):         ~14 m length.
- *   - UAS (sheriff Mavic/Phantom class):                  ~0.5 m — scaled up
- *     to ~5 m here so it stays findable at map zoom 11. The dashed ground
- *     stem (added in visuals.ts) is the primary "this is a drone" cue.
- */
+// Procedural low-poly aircraft meshes, no external asset files.
+//
+// All meshes are oriented nose-along +X (heading 90°) at unit scale = real
+// meters. The render layer rotates them to true_track each frame.
+//
+// Reference sizes (rough, just enough to read at zoom 10-13):
+//   Type 1 helo (S-64, K-MAX): ~25 m rotor span, modeled to ~16 m
+//   Air tanker (BAe-146 / RJ85): ~30 m length
+//   Recon FW (Twin Otter-ish): ~16 m length
+//   ATGS air attack (King Air-ish): ~14 m length
+//   UAS (sheriff Mavic/Phantom): ~0.5 m, scaled up to ~5 m here so it stays
+//     findable at zoom 11. Dashed ground stem in visuals.ts is the primary
+//     "this is a drone" cue.
 
 import * as THREE from 'three';
 import type { AircraftCategory } from '../data/types';
@@ -40,10 +36,6 @@ const UAS_BODY = new THREE.MeshStandardMaterial({
 	metalness: 0.3,
 	roughness: 0.6,
 });
-
-// -----------------------------------------------------------------------------
-// Helicopter
-// -----------------------------------------------------------------------------
 
 function buildHelo(): THREE.Group {
 	const g = new THREE.Group();
@@ -80,10 +72,7 @@ function buildHelo(): THREE.Group {
 	return g;
 }
 
-// -----------------------------------------------------------------------------
-// Fixed-wing tanker  (BAe-146 / RJ85 silhouette: high wing, four engines).
-// -----------------------------------------------------------------------------
-
+// Tanker: BAe-146 / RJ85 silhouette, high wing + four engines.
 function buildTanker(): THREE.Group {
 	const g = new THREE.Group();
 
@@ -124,10 +113,7 @@ function buildTanker(): THREE.Group {
 	return g;
 }
 
-// -----------------------------------------------------------------------------
-// Generic small fixed-wing (used for recon + ATGS — twin-engine high-wing).
-// -----------------------------------------------------------------------------
-
+// Small twin-engine high-wing, used for both recon and ATGS.
 function buildSmallFixedWing(): THREE.Group {
 	const g = new THREE.Group();
 
@@ -163,10 +149,7 @@ function buildSmallFixedWing(): THREE.Group {
 	return g;
 }
 
-// -----------------------------------------------------------------------------
-// UAS (quadcopter — small body + 4 cross-arm rotors).
-// -----------------------------------------------------------------------------
-
+// UAS: small body + four cross-arm rotors.
 function buildUas(): THREE.Group {
 	const g = new THREE.Group();
 
@@ -195,8 +178,6 @@ function buildUas(): THREE.Group {
 
 	return g;
 }
-
-// -----------------------------------------------------------------------------
 
 export function buildAircraftMesh(category: AircraftCategory): THREE.Group {
 	switch (category) {

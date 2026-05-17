@@ -10,13 +10,9 @@ import { getCurrentAircraft } from '../composables/useAircraftStore';
 import { getCurrentConflicts } from '../composables/useDeconfliction';
 import { createFtaLayer } from './ftaLayer';
 
-/**
- * Build the MapLibre style: a single muted raster basemap, a terrarium-encoded
- * DEM source for 3D terrain, and a hillshade derived from the same DEM.
- *
- * Both raster sources are referenced through config.ts so Slice 2 can swap to
- * locally-bundled tiles without touching this file.
- */
+// MapLibre style: muted raster basemap, terrarium DEM for 3D terrain, and a
+// hillshade derived from the same DEM. Tile URLs go through config.ts so we
+// can swap remote vs bundled-local without touching this file.
 function buildStyle(): StyleSpecification {
 	return {
 		version: 8,
@@ -39,9 +35,8 @@ function buildStyle(): StyleSpecification {
 				attribution:
 					'Terrain: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">Tilezen Joerd</a> (AWS Public Datasets)',
 			},
-			// MapLibre warns when one raster-dem is used for both terrain and hillshade.
-			// Use a second source pointing at the same tiles to silence the warning and
-			// follow the canonical MapLibre 3D-terrain example.
+			// MapLibre warns if one raster-dem source is reused for both terrain
+			// and hillshade; declare it twice so each layer has its own handle.
 			hillshadeDem: {
 				type: 'raster-dem',
 				tiles: [terrainTileUrl()],
@@ -78,9 +73,8 @@ function buildStyle(): StyleSpecification {
 			source: 'terrainDem',
 			exaggeration: 1.0,
 		},
-		// Fog parameters are tuned to dissolve the edge of the loaded tile pack
-		// into the background — without this you get a visible black "cliff"
-		// where the terrain ends abruptly at the bbox edge.
+		// Fog dissolves the edge of the loaded tile pack into the background;
+		// without it you get a visible black "cliff" where terrain ends.
 		sky: {
 			'sky-color': '#0a0d12',
 			'sky-horizon-blend': 0.6,
@@ -92,12 +86,10 @@ function buildStyle(): StyleSpecification {
 	};
 }
 
-/**
- * The tile fetcher pre-loads DEMO_BBOX + a 0.5° buffer in every direction.
- * Clamping the camera CENTER to a slightly tighter inner bbox keeps the
- * full pitched view inside the loaded area at zoom 9 — the buffer absorbs
- * the extra reach of the pitched-camera horizon.
- */
+// fetch-tiles pre-loads DEMO_BBOX + a 0.5° buffer in every direction.
+// Clamping the camera center to a slightly tighter inner bbox keeps the
+// pitched view inside the loaded area, the buffer absorbs the extra reach
+// of the pitched horizon.
 const PAN_BUFFER_DEG = 0.25;
 const maxBounds: LngLatBoundsLike = [
 	[DEMO_BBOX.lonMin - PAN_BUFFER_DEG, DEMO_BBOX.latMin - PAN_BUFFER_DEG],
@@ -121,11 +113,10 @@ export function createMap(container: HTMLElement): MapLibreMap {
 
 	map.on('load', () => {
 		addFirePerimeterLayers(map);
-		// Boundary line BEFORE place labels so labels render on top of the line.
+		// Boundary line first so place labels render on top of it.
 		addScenarioBoundaryLayer(map);
 		addPlaceLabels(map);
-		// Order matters: structural airspace (TFR, FTA) first, aircraft layer
-		// last so aircraft draw on top of the translucent volumes.
+		// Order matters: structural airspace volumes, then aircraft on top.
 		map.addLayer(createTfrLayer());
 		map.addLayer(createFtaLayer());
 		map.addLayer(createAircraftLayer(getCurrentAircraft, getCurrentConflicts));

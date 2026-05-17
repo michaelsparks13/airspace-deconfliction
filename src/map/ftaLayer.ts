@@ -1,16 +1,11 @@
-/**
- * Fire Traffic Area volume.
- *
- *  - 12 NM ICOM ring (the FTA communications boundary) rendered as a thin
- *    line at ground.
- *  - Operational zones (drop zone, convective column, dip site) rendered as
- *    translucent vertical cylinders, color-coded by kind. The convective
- *    column is the no-fly core and reads brightest.
- *
- * Modeled on src/map/tfr.ts: a MapLibre CustomLayer running its own three.js
- * scene with the canonical scene-local-meters / y-up / origin-at-scenario-
- * center convention used everywhere else in this codebase.
- */
+// Fire Traffic Area volume:
+//   - 12 NM ICOM ring rendered as a thin ground line.
+//   - Operational zones (drop zone, convective column, dip site) as
+//     translucent vertical cylinders. The convective column reads brightest
+//     since it's the no-fly core.
+//
+// Same shape as tfr.ts: CustomLayer with its own three.js scene, using the
+// scene-local-meters / y-up / origin-at-scenario-center convention.
 
 import * as THREE from 'three';
 import maplibregl, {
@@ -49,7 +44,6 @@ const ZONE_STYLES: Record<OperationalZone['kind'], { color: number; opacity: num
 	'dip-site':          { color: 0x6fb8ff, opacity: 0.18 },
 };
 
-/** Renders the 12 NM ICOM ring as a thin ground-level circle. */
 function buildIcomRing(): THREE.Line {
 	const { centerLat, centerLon, icomRingRadiusMeters } = SCENARIO_FTA;
 	const center = sceneXY(centerLon, centerLat);
@@ -58,7 +52,8 @@ function buildIcomRing(): THREE.Line {
 		const a = (i / ICOM_SEGMENTS) * Math.PI * 2;
 		const x = center.x + Math.cos(a) * icomRingRadiusMeters;
 		const y = center.y + Math.sin(a) * icomRingRadiusMeters;
-		// y in scene = north, so position the ring on the ground (alt=0).
+		// Scene Y=alt, so a ground-level ring needs y=0 in scene coords;
+		// the north component lives in z.
 		points.push(new THREE.Vector3(x, 0, y));
 	}
 	const geom = new THREE.BufferGeometry().setFromPoints(points);
@@ -71,16 +66,12 @@ function buildIcomRing(): THREE.Line {
 	return new THREE.Line(geom, mat);
 }
 
-/**
- * One operational zone -> a translucent vertical cylinder.
- *
- * For unbounded ceilings (the convective column) we render a tall finite
- * cylinder — taller than any plausible aircraft AGL — so the operator reads
- * it as "no-fly all the way up" without dealing with infinite geometry.
- */
+// One operational zone = one translucent vertical cylinder. Unbounded
+// ceilings (the convective column) become a 3,000 m finite cylinder, taller
+// than any plausible aircraft AGL so it reads "no-fly all the way up".
 function buildZoneCylinder(zone: OperationalZone): THREE.Mesh {
 	const center = sceneXY(zone.centerLon, zone.centerLat);
-	const ceilAgl = zone.ceilAglMeters ?? 3000; // unbounded -> tall but finite
+	const ceilAgl = zone.ceilAglMeters ?? 3000;
 	const heightMeters = ceilAgl - zone.floorAglMeters;
 	const radialSegments = 48;
 	const geom = new THREE.CylinderGeometry(
@@ -89,10 +80,10 @@ function buildZoneCylinder(zone: OperationalZone): THREE.Mesh {
 		heightMeters,
 		radialSegments,
 		1,
-		true,         // openEnded — no top/bottom caps; reads as a volume not a can
+		true,         // openEnded: reads as a volume, not a can
 	);
-	// CylinderGeometry centers on origin with axis along +Y. Move so the base
-	// sits at floorAgl and the cylinder rises to ceilAgl.
+	// CylinderGeometry centers on origin with axis along +Y; shift so the
+	// base sits at floorAgl.
 	geom.translate(0, zone.floorAglMeters + heightMeters / 2, 0);
 
 	const style = ZONE_STYLES[zone.kind];

@@ -1,8 +1,6 @@
-/**
- * Replay playback composable. Advances `currentTime` via requestAnimationFrame,
- * exposes reactive aircraft state pulled from the replay adapter, and surfaces
- * the play/pause/seek/speed controls that TimeBar.vue binds to.
- */
+// Replay playback. Advances currentTime via rAF, exposes the reactive
+// aircraft array from the replay adapter, and the play/pause/seek/speed
+// controls that TimeBar binds to.
 
 import { computed, onScopeDispose, ref, shallowRef } from 'vue';
 import type { Aircraft } from '../data/types';
@@ -30,7 +28,7 @@ export function useReplay() {
 		lastWallMs = nowMs;
 		let next = currentTime.value + dt * speed.value;
 		if (next >= SCENARIO_DURATION) {
-			// Loop back to the start so the demo can run unattended.
+			// Wrap so the demo loops unattended.
 			next = next % SCENARIO_DURATION;
 		}
 		currentTime.value = next;
