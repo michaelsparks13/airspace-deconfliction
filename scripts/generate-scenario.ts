@@ -262,25 +262,21 @@ const UAS_KEYS: Keyframe[] = [
 	{ t: 90, lat: 37.8380, lon: -107.8150, aglMeters: 120, headingDeg: 180, gsMps: 6, vrateMps: 0 },
 ];
 
-// Stray GA single (Cirrus-class) on a VFR cross-country northbound to
-// Telluride/Montrose, cruising ~13 kft MSL, pilot not monitoring NOTAMs.
-// Crosses the TFR cylinder from the south, threads right over the active
-// fire and the convective column near T+60, then exits to the north.
-// Drives the scenario's headline intruder caution and stacks a
-// column-incursion critical when overhead the column.
+// Stray GA single (Cessna-class) on a VFR cross-country northbound to
+// Telluride/Montrose, pilot not monitoring NOTAMs. Already inside the
+// perimeter at T+0, threads directly over the convective column at T+30,
+// then crawls out the north side.
 //
 // Longitude held at the column's longitude (-107.795) so the trajectory
-// bisects the fire on screen. Heading 0 (due north), ~100 m/s (~190 kt).
-// AGL keyframes are interpolated by the script against the DEM, so they're
-// set to keep MSL roughly constant at ~3950 m as terrain rises into and
-// falls out of the perimeter.
+// bisects the fire on screen. Heading 0 (due north), ~60 m/s (~115 kt) —
+// at the slow end of GA cruise, which keeps the intruder visually inside
+// the perimeter for the first half of the run instead of starting off in
+// a corner of the viewport.
 const GA_INTRUDER_KEYS: Keyframe[] = [
-	{ t: 0,  lat: 37.8020, lon: -107.7950, aglMeters: 950, headingDeg: 0, gsMps: 100, vrateMps: 0 },
-	{ t: 20, lat: 37.8200, lon: -107.7950, aglMeters: 750, headingDeg: 0, gsMps: 100, vrateMps: 0 },
-	{ t: 40, lat: 37.8380, lon: -107.7950, aglMeters: 700, headingDeg: 0, gsMps: 100, vrateMps: 0 },
-	{ t: 60, lat: 37.8560, lon: -107.7950, aglMeters: 660, headingDeg: 0, gsMps: 100, vrateMps: 0 },
-	{ t: 75, lat: 37.8695, lon: -107.7950, aglMeters: 720, headingDeg: 0, gsMps: 100, vrateMps: 0 },
-	{ t: 90, lat: 37.8830, lon: -107.7950, aglMeters: 850, headingDeg: 0, gsMps: 100, vrateMps: 0 },
+	{ t: 0,  lat: 37.8400, lon: -107.7950, aglMeters: 700, headingDeg: 0, gsMps: 60, vrateMps: 0 },
+	{ t: 30, lat: 37.8560, lon: -107.7950, aglMeters: 700, headingDeg: 0, gsMps: 60, vrateMps: 0 },
+	{ t: 60, lat: 37.8720, lon: -107.7950, aglMeters: 750, headingDeg: 0, gsMps: 60, vrateMps: 0 },
+	{ t: 90, lat: 37.8880, lon: -107.7950, aglMeters: 850, headingDeg: 0, gsMps: 60, vrateMps: 0 },
 ];
 
 // --- Track manifest ---
