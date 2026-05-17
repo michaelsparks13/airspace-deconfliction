@@ -23,8 +23,6 @@ The map stack, bottom up:
 
 Two `CustomLayerInterface` layers means two three.js scenes sharing the MapLibre GL context. Both compose the same matrix: MapLibre projection × translate(originMercator) × scale(s, -s, s), where `s = originMercator.meterInMercatorCoordinateUnits()`. The scene is pre-rotated so its local axes are (east, up, north) in real meters from a fixed scenario-center origin.
 
-The deconfliction model is the part I'd want to talk about most: it's structural and predictive, not a fixed separation bubble. Aircraft over a fire deliberately operate inside en-route minima, so the model the ATGS actually runs is (a) is each aircraft inside its assigned altitude block ("the stack"), (b) is anyone predicted to converge with a non-coordinated aircraft in the next 60 seconds, (c) is anyone inside the convective column, and (d) is any non-participant inside the TFR. Source: `src/deconfliction.ts`.
-
 ## Conventions
 
 - Vite + Vue 3 + TypeScript, `<script setup>` Composition API. No Pinia (state lives in module-scoped composables), no router (single view), no UI framework (hand-rolled CSS keeps the tactical look from sliding toward Material).
