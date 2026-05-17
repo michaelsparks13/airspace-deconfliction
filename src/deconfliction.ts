@@ -131,25 +131,30 @@ export function detectConflicts(
 	const tol = DECONFLICTION.blockBustToleranceMeters;
 
 	for (const a of aircraft) {
-		const block = a.assignedBlock;
-		if (a.aglMeters < block.floorAglMeters - tol) {
-			out.push({
-				kind: 'block-bust',
-				severity: 'caution',
-				id: a.id,
-				callsign: a.callsign,
-				edge: 'floor',
-				exceedanceMeters: a.aglMeters - block.floorAglMeters,
-			});
-		} else if (a.aglMeters > block.ceilAglMeters + tol) {
-			out.push({
-				kind: 'block-bust',
-				severity: 'caution',
-				id: a.id,
-				callsign: a.callsign,
-				edge: 'ceiling',
-				exceedanceMeters: a.aglMeters - block.ceilAglMeters,
-			});
+		// Block-bust is about a participant deviating from its ATGS-assigned
+		// slot. Non-participants by definition have no slot, so the check is
+		// meaningless for them (their "block" in the data is a placeholder).
+		if (a.participant) {
+			const block = a.assignedBlock;
+			if (a.aglMeters < block.floorAglMeters - tol) {
+				out.push({
+					kind: 'block-bust',
+					severity: 'caution',
+					id: a.id,
+					callsign: a.callsign,
+					edge: 'floor',
+					exceedanceMeters: a.aglMeters - block.floorAglMeters,
+				});
+			} else if (a.aglMeters > block.ceilAglMeters + tol) {
+				out.push({
+					kind: 'block-bust',
+					severity: 'caution',
+					id: a.id,
+					callsign: a.callsign,
+					edge: 'ceiling',
+					exceedanceMeters: a.aglMeters - block.ceilAglMeters,
+				});
+			}
 		}
 
 		for (const zone of fta.zones) {

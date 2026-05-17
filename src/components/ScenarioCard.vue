@@ -52,8 +52,8 @@ function toggle() {
 				<p>
 					Five aircraft are working inside the Fire Traffic Area — a Type 1 helicopter,
 					an air tanker, fixed-wing recon, Air Attack (the ATGS), and a sheriff's UAS —
-					stacked by altitude block. A sixth aircraft, a non-participant with no TFR
-					clearance, strays into the restricted airspace partway through.
+					stacked by altitude block. A sixth aircraft, a stray VFR pilot who didn't
+					check NOTAMs, transits the TFR northbound and threads right over the fire.
 				</p>
 				<p>Conflicts surface in the alert banner and side panel as they develop.</p>
 			</div>

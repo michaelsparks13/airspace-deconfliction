@@ -11,7 +11,8 @@ export type AircraftCategory =
 	| 'air-tanker'      // Fixed-wing retardant tanker
 	| 'recon-fw'        // Fixed-wing reconnaissance / observation orbit
 	| 'atgs-fw'         // Fixed-wing Air Tactical Group Supervisor ("Air Attack")
-	| 'uas-sheriff';    // Sheriff's small unmanned aircraft system
+	| 'uas-sheriff'     // Sheriff's small unmanned aircraft system
+	| 'ga-fixed-wing';  // General aviation single (Cessna / Cirrus class) — non-FTA
 
 export type CrewType = 'manned' | 'uas';
 

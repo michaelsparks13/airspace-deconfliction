@@ -17,6 +17,7 @@ const CATEGORY_GLYPH: Record<AircraftCategory, string> = {
 	'recon-fw': 'F',
 	'atgs-fw': 'A',
 	'uas-sheriff': 'Q',
+	'ga-fixed-wing': 'G',
 };
 
 interface Row {

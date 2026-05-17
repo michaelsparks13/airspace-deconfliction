@@ -45,11 +45,16 @@ export const DECONFLICTION = {
 // (rotor ceiling vs tanker floor) is intentional, that's the region the ATGS
 // deconflicts by hand. Reference: NWCG PMS 505.
 export const STACK: Record<AircraftCategory, AltitudeBlock> = {
-	'helo-type1':  { label: 'ROTOR',  floorAglMeters: 0,    ceilAglMeters: 152 },   // sfc–500 ft
-	'air-tanker':  { label: 'TANKER', floorAglMeters: 122,  ceilAglMeters: 762 },   // 400–2500 ft
-	'recon-fw':    { label: 'RECON',  floorAglMeters: 671,  ceilAglMeters: 914 },   // 2200–3000 ft
-	'atgs-fw':     { label: 'ATGS',   floorAglMeters: 975,  ceilAglMeters: 1463 },  // 3200–4800 ft
-	'uas-sheriff': { label: 'UAS',    floorAglMeters: 0,    ceilAglMeters: 122 },   // sfc–400 ft
+	'helo-type1':    { label: 'ROTOR',  floorAglMeters: 0,    ceilAglMeters: 152 },   // sfc–500 ft
+	'air-tanker':    { label: 'TANKER', floorAglMeters: 122,  ceilAglMeters: 762 },   // 400–2500 ft
+	'recon-fw':      { label: 'RECON',  floorAglMeters: 671,  ceilAglMeters: 914 },   // 2200–3000 ft
+	'atgs-fw':       { label: 'ATGS',   floorAglMeters: 975,  ceilAglMeters: 1463 },  // 3200–4800 ft
+	'uas-sheriff':   { label: 'UAS',    floorAglMeters: 0,    ceilAglMeters: 122 },   // sfc–400 ft
+	// Non-participant GA has no ATGS-assigned slot. Label this 'TRANSIT' so
+	// the side panel renders something, and set bounds wide enough that the
+	// block-bust check (which is skipped for non-participants anyway) wouldn't
+	// fire even if the rule changed.
+	'ga-fixed-wing': { label: 'TRANSIT', floorAglMeters: 0, ceilAglMeters: 5000 },
 } as const;
 
 // 12 NM ICOM ring: the FTA communications boundary all incident aircraft
@@ -66,11 +71,16 @@ export const AGL_BANDS = {
 
 // TFR modeled as a circular cylinder (14 CFR 91.137 wildfire TFRs are
 // circular around a point with an MSL ceiling), not the perimeter polygon.
+// 15,000 ft MSL: terrain inside the fire perimeter peaks around 12,800 ft,
+// so a more typical 12,000 ft ceiling would sit *below* the ground in
+// places and silently exclude low-AGL traffic from the cylinder. Real
+// mountain wildfire TFRs are routinely written at 14–18 kft MSL for the
+// same reason.
 export const TFR = {
 	centerLat: SCENARIO_CENTER[1],
 	centerLon: SCENARIO_CENTER[0],
 	radiusMeters: 5 * 1852,     // 5 NM, typical wildfire footprint
-	ceilingFt: 12000,
+	ceilingFt: 15000,
 	get ceilingMeters(): number {
 		return this.ceilingFt * 0.3048;
 	},

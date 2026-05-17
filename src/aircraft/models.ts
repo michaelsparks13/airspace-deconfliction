@@ -36,6 +36,18 @@ const UAS_BODY = new THREE.MeshStandardMaterial({
 	metalness: 0.3,
 	roughness: 0.6,
 });
+// Bright civilian paint scheme to distinguish a stray GA aircraft from the
+// muted military-grey FTA participants at a glance.
+const GA_BODY = new THREE.MeshStandardMaterial({
+	color: 0xe4e9ef,
+	metalness: 0.35,
+	roughness: 0.5,
+});
+const GA_ACCENT = new THREE.MeshStandardMaterial({
+	color: 0xc25a4b,
+	metalness: 0.4,
+	roughness: 0.45,
+});
 
 function buildHelo(): THREE.Group {
 	const g = new THREE.Group();
@@ -179,6 +191,56 @@ function buildUas(): THREE.Group {
 	return g;
 }
 
+// GA single-engine: small low-wing piston (Cirrus SR22 / Bonanza class).
+// Single nose-mounted prop disc, no engines on the wing, painted in civilian
+// red/white so it pops against the grey FTA fleet.
+function buildGaSingle(): THREE.Group {
+	const g = new THREE.Group();
+
+	const fuselage = new THREE.Mesh(new THREE.BoxGeometry(7, 1.6, 1.6), GA_BODY);
+	fuselage.position.y = 1.5;
+	g.add(fuselage);
+
+	const nose = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.6, 10), GA_BODY);
+	nose.rotation.z = -Math.PI / 2;
+	nose.position.set(4.3, 1.5, 0);
+	g.add(nose);
+
+	// Spinner + prop disc on the nose.
+	const spinner = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.6, 8), GA_ACCENT);
+	spinner.rotation.z = -Math.PI / 2;
+	spinner.position.set(5.4, 1.5, 0);
+	g.add(spinner);
+
+	const prop = new THREE.Mesh(new THREE.CircleGeometry(1.4, 16), DISC);
+	prop.rotation.y = Math.PI / 2;
+	prop.position.set(5.6, 1.5, 0);
+	g.add(prop);
+
+	// Low wing.
+	const wing = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 11), GA_BODY);
+	wing.position.set(0.2, 1.0, 0);
+	g.add(wing);
+
+	// Wingtip striping accent so it reads as civilian, not muted military.
+	const tipGeom = new THREE.BoxGeometry(2.4, 0.28, 0.8);
+	const tipL = new THREE.Mesh(tipGeom, GA_ACCENT);
+	tipL.position.set(0.2, 1.0, -5.2);
+	const tipR = new THREE.Mesh(tipGeom, GA_ACCENT);
+	tipR.position.set(0.2, 1.0, 5.2);
+	g.add(tipL, tipR);
+
+	const hstab = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.2, 3.2), GA_BODY);
+	hstab.position.set(-3.2, 1.7, 0);
+	g.add(hstab);
+
+	const vfin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.4, 0.2), GA_BODY);
+	vfin.position.set(-3.2, 2.3, 0);
+	g.add(vfin);
+
+	return g;
+}
+
 export function buildAircraftMesh(category: AircraftCategory): THREE.Group {
 	switch (category) {
 		case 'helo-type1':
@@ -190,5 +252,7 @@ export function buildAircraftMesh(category: AircraftCategory): THREE.Group {
 			return buildSmallFixedWing();
 		case 'uas-sheriff':
 			return buildUas();
+		case 'ga-fixed-wing':
+			return buildGaSingle();
 	}
 }
