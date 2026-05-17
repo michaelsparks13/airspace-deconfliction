@@ -119,15 +119,6 @@ export function createMap(container: HTMLElement): MapLibreMap {
 		attributionControl: { compact: true },
 	});
 
-	map.addControl(
-		new maplibregl.NavigationControl({
-			visualizePitch: true,
-			showZoom: true,
-			showCompass: true,
-		}),
-		'top-left',
-	);
-
 	map.on('load', () => {
 		addFirePerimeterLayers(map);
 		// Boundary line BEFORE place labels so labels render on top of the line.
